@@ -1,0 +1,23 @@
+package io.issuetracker.sample
+
+import android.app.Application
+import io.issuetracker.sdk.Issuetracker
+
+class SampleApplication : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        Issuetracker.configure(
+            application = this,
+            apiKey = BuildConfig_Sdk.SDK_API_KEY,
+            endpoint = "https://issuetracker-api-staging.web.app/v1",
+        )
+    }
+}
+
+/**
+ * Replace at integration time. Kept as a separate Kotlin object (not
+ * BuildConfig) so the sample doesn't need a custom buildConfigField.
+ */
+private object BuildConfig_Sdk {
+    const val SDK_API_KEY: String = "it_replace_with_real_key_from_admin_ui"
+}

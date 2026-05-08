@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application>
+        <activity
+            android:name=".ui.ReportActivity"
+            android:exported="false"
+            android:theme="@style/Theme.IssuetrackerSdk.Reporter"
+            android:configChanges="orientation|screenSize|keyboardHidden|uiMode" />
+
+        <provider
+            android:name=".internal.SdkInitProvider"
+            android:authorities="${applicationId}.io.issuetracker.sdk.init"
+            android:exported="false"
+            android:initOrder="100" />
+    </application>
+</manifest>

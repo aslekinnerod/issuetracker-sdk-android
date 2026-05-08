@@ -1,0 +1,19 @@
+# Android / Gradle
+*.iml
+.gradle/
+local.properties
+.DS_Store
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+
+# IDE
+.idea/
+.vscode/
+*.log
+
+# Maven publish artifacts (regenerated on demand)
+~/.m2/
