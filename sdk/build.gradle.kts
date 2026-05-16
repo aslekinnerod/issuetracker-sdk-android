@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "io.issuetracker"
-version = "0.1.0-SNAPSHOT"
+version = "0.4.0"
 
 android {
     namespace = "io.issuetracker.sdk"

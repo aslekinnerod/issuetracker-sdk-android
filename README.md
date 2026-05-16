@@ -23,8 +23,7 @@ class MyApp : Application() {
         super.onCreate()
         Issuetracker.configure(
             application = this,
-            apiKey = "it_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-            endpoint = "https://api.issuetracker.no/v1"
+            apiKey = "it_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
         )
     }
 }
@@ -40,22 +39,7 @@ That's it. Either gesture brings up the reporter:
 
 Both gestures are enabled by default. Disable individually via `shakeToReport = false` or `longPressToReport = false` on `configure(...)`.
 
-## Environments
-
-| Environment | Endpoint |
-| --- | --- |
-| Production | `https://api.issuetracker.no/v1` |
-| Staging | `https://issuetracker-api-staging.web.app/v1` |
-
-Use a staging API key when pointing at staging — production keys are not accepted there, and vice versa.
-
-```kotlin
-Issuetracker.configure(
-    application = this,
-    apiKey = "it_staging_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-    endpoint = "https://issuetracker-api-staging.web.app/v1"
-)
-```
+The SDK talks to Issuetracker's hosted backend — there is no endpoint to configure. Staging-prefixed keys (`it_staging_…`) are routed to the staging environment automatically; everything else hits production.
 
 ## Manual trigger
 

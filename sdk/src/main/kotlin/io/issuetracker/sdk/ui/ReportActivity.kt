@@ -9,6 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import io.issuetracker.sdk.internal.LifecycleStore
 import io.issuetracker.sdk.internal.ReporterIdentity
 import io.issuetracker.sdk.internal.ReportingSession
 
@@ -30,26 +31,35 @@ internal class ReportActivity : ComponentActivity() {
 
         setContent {
             MaterialTheme {
-                var showNamePrompt by remember { mutableStateOf(ReporterIdentity.name == null) }
                 Surface(color = MaterialTheme.colorScheme.surface) {
-                    if (showNamePrompt) {
-                        NamePromptScreen(
-                            onContinue = { name ->
-                                ReporterIdentity.setName(name)
-                                showNamePrompt = false
-                            },
-                            onCancel = { finish() },
-                        )
+                    if (LifecycleStore.isTerminated) {
+                        // ADR-0003 Decision 9 pre-flight gate. When the
+                        // SDK has been terminated, every trigger that
+                        // launches this activity shows the terminal
+                        // message — no retry, no error code, no link
+                        // back to our service.
+                        TerminatedScreen(onClose = { finish() })
                     } else {
-                        ReportScreen(
-                            runtime = runtime,
-                            screenshot = screenshot,
-                            onChangeName = {
-                                ReporterIdentity.clearName()
-                                showNamePrompt = true
-                            },
-                            onClose = { finish() },
-                        )
+                        var showNamePrompt by remember { mutableStateOf(ReporterIdentity.name == null) }
+                        if (showNamePrompt) {
+                            NamePromptScreen(
+                                onContinue = { name ->
+                                    ReporterIdentity.setName(name)
+                                    showNamePrompt = false
+                                },
+                                onCancel = { finish() },
+                            )
+                        } else {
+                            ReportScreen(
+                                runtime = runtime,
+                                screenshot = screenshot,
+                                onChangeName = {
+                                    ReporterIdentity.clearName()
+                                    showNamePrompt = true
+                                },
+                                onClose = { finish() },
+                            )
+                        }
                     }
                 }
             }

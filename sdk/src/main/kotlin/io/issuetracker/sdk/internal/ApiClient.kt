@@ -1,5 +1,7 @@
 package io.issuetracker.sdk.internal
 
+import io.issuetracker.sdk.SdkErrorDetails
+import io.issuetracker.sdk.SdkErrorReason
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -34,12 +36,21 @@ internal object ApiClient {
             val stream = if (status >= 400) conn.errorStream else conn.inputStream
             val responseText = stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
             if (status >= 400) {
-                val errMsg = try {
-                    JSONObject(responseText).getJSONObject("error").getString("message")
+                // Callable error shape: {"error": {"message", "status", "details": {...}}}
+                // ADR-0003 Decision 9: when `details` is present, parse it
+                // into a typed `SdkErrorDetails` so callers can dispatch
+                // on the reason rather than the HTTP status alone.
+                var errMsg = "HTTP $status"
+                var details: SdkErrorDetails? = null
+                try {
+                    val errObj = JSONObject(responseText).getJSONObject("error")
+                    errMsg = errObj.optString("message").takeIf { it.isNotEmpty() } ?: errMsg
+                    details = SdkErrorDetails.fromJson(errObj.optJSONObject("details"))
                 } catch (_: Exception) {
-                    "HTTP $status"
+                    // Leave defaults; non-JSON error bodies fall through
+                    // as message-only ApiExceptions.
                 }
-                throw ApiException(status, errMsg)
+                throw ApiException(status, errMsg, details)
             }
             JSONObject(responseText).getJSONObject("result")
         } finally {
@@ -48,4 +59,10 @@ internal object ApiClient {
     }
 }
 
-internal class ApiException(val status: Int, message: String) : RuntimeException(message)
+internal class ApiException(
+    val status: Int,
+    message: String,
+    val details: SdkErrorDetails? = null,
+) : RuntimeException(message) {
+    val sdkErrorReason: SdkErrorReason? get() = details?.reason
+}

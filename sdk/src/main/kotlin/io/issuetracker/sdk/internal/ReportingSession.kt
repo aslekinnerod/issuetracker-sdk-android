@@ -31,7 +31,11 @@ internal object ReportingSession {
         scope.launch {
             val activity = ActivityProvider.current() ?: return@launch
             pendingRuntime = runtime
-            pendingScreenshot = ScreenshotCapture.captureCurrentActivity()
+            // ADR-0003 Decision 9: when terminated, the activity will
+            // render TerminatedScreen — skip the screenshot capture
+            // since no report form will be shown.
+            pendingScreenshot = if (LifecycleStore.isTerminated) null
+                                else ScreenshotCapture.captureCurrentActivity()
             activity.startActivity(
                 Intent(activity, ReportActivity::class.java)
                     .addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION),
@@ -92,6 +96,17 @@ internal object ReportingSession {
             }
             val result = ApiClient.call(runtime.endpoint, "createIssueFromSdk", payload)
             Result.success(result)
+        } catch (e: ApiException) {
+            // ADR-0003 Decision 9: non-recoverable failures flip the
+            // SDK into one-way TERMINATED. The user sees this submit's
+            // error message in the current activity; the next trigger
+            // (shake / long-press / programmatic) will hit the
+            // pre-flight gate in present() and surface TerminatedScreen.
+            val reason = e.sdkErrorReason
+            if (reason != null && !reason.isRecoverable) {
+                LifecycleStore.transitionToTerminated(reason, runtime.onConfigurationError)
+            }
+            Result.failure(e)
         } catch (e: Exception) {
             Result.failure(e)
         }
