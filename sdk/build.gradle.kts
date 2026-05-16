@@ -1,3 +1,5 @@
+import com.vanniktech.maven.publish.SonatypeHost
+
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
@@ -15,11 +17,13 @@ version = "0.4.1"
 // `ORG_GRADLE_PROJECT_` — see .github/workflows/publish.yml.
 mavenPublishing {
     // Sonatype Central Portal endpoint (new system, replaces OSSRH).
+    // Must be set explicitly — the plugin defaults to legacy OSSRH,
+    // which returns HTTP 402 for accounts created after 2024.
     // `automaticRelease = true` skips the manual "Release" click in the
     // Sonatype UI — once the staging repo passes validation, the
     // artifacts are promoted to Maven Central immediately. Disable
     // if you want a manual gate per release.
-    publishToMavenCentral(automaticRelease = true)
+    publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL, automaticRelease = true)
     signAllPublications()
 
     coordinates("no.issuetracker", "sdk", project.version.toString())
