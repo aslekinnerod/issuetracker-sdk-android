@@ -32,12 +32,14 @@ internal class ReportActivity : ComponentActivity() {
         setContent {
             MaterialTheme {
                 Surface(color = MaterialTheme.colorScheme.surface) {
-                    if (LifecycleStore.isTerminated) {
-                        // ADR-0003 Decision 9 pre-flight gate. When the
-                        // SDK has been terminated, every trigger that
-                        // launches this activity shows the terminal
-                        // message — no retry, no error code, no link
-                        // back to our service.
+                    // Compose-reactive mirror of LifecycleStore.isTerminated.
+                    // Seeded with the boot-time value (pre-flight gate from
+                    // ADR-0003 Decision 9), and flipped to true by
+                    // ReportScreen.onTerminated when a submit transitions
+                    // the SDK to TERMINATED mid-session — so the user goes
+                    // straight to the terminal view without a re-trigger.
+                    var terminated by remember { mutableStateOf(LifecycleStore.isTerminated) }
+                    if (terminated) {
                         TerminatedScreen(onClose = { finish() })
                     } else {
                         var showNamePrompt by remember { mutableStateOf(ReporterIdentity.name == null) }
@@ -58,6 +60,7 @@ internal class ReportActivity : ComponentActivity() {
                                     showNamePrompt = true
                                 },
                                 onClose = { finish() },
+                                onTerminated = { terminated = true },
                             )
                         }
                     }

@@ -43,6 +43,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import io.issuetracker.sdk.IssueReportType
 import io.issuetracker.sdk.Runtime
+import io.issuetracker.sdk.internal.LifecycleStore
 import io.issuetracker.sdk.internal.ReporterIdentity
 import io.issuetracker.sdk.internal.ReportingSession
 import kotlinx.coroutines.launch
@@ -54,6 +55,7 @@ internal fun ReportScreen(
     screenshot: Bitmap?,
     onChangeName: () -> Unit,
     onClose: () -> Unit,
+    onTerminated: () -> Unit,
 ) {
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
@@ -174,7 +176,19 @@ internal fun ReportScreen(
                         submitting = false
                         result
                             .onSuccess { onClose() }
-                            .onFailure { errorMessage = it.message ?: "Failed to send report" }
+                            .onFailure {
+                                // ADR-0003 Decision 9: if submit
+                                // transitioned the SDK to TERMINATED,
+                                // swap the form for TerminatedScreen
+                                // immediately rather than leaving the
+                                // user on a stale form with an error
+                                // they cannot retry past.
+                                if (LifecycleStore.isTerminated) {
+                                    onTerminated()
+                                } else {
+                                    errorMessage = it.message ?: "Failed to send report"
+                                }
+                            }
                     }
                 },
                 enabled = canSubmit,
