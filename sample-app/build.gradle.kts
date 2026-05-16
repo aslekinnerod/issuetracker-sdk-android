@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "io.issuetracker.sample"
+    namespace = "no.issuetracker.sample"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "io.issuetracker.sample"
+        applicationId = "no.issuetracker.sample"
         minSdk = 26
         targetSdk = 36
         versionCode = 1

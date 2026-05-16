@@ -1,4 +1,4 @@
-package io.issuetracker.sdk.ui
+package no.issuetracker.sdk.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column

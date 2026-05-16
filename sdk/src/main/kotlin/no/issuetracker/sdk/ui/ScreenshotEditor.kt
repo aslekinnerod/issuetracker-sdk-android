@@ -1,4 +1,4 @@
-package io.issuetracker.sdk.ui
+package no.issuetracker.sdk.ui
 
 import android.graphics.Bitmap
 import androidx.compose.foundation.Canvas

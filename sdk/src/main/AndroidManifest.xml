@@ -13,7 +13,7 @@
 
         <provider
             android:name=".internal.SdkInitProvider"
-            android:authorities="${applicationId}.io.issuetracker.sdk.init"
+            android:authorities="${applicationId}.no.issuetracker.sdk.init"
             android:exported="false"
             android:initOrder="100" />
     </application>

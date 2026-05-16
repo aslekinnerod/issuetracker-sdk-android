@@ -1,4 +1,4 @@
-package io.issuetracker.sdk.internal
+package no.issuetracker.sdk.internal
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -15,7 +15,7 @@ import java.util.UUID
  * the name is blank or duplicated across users.
  */
 internal object ReporterIdentity {
-    private const val PREFS_NAME = "io.issuetracker.sdk.identity"
+    private const val PREFS_NAME = "no.issuetracker.sdk.identity"
     private const val NAME_KEY = "reporter_name"
     private const val INSTALL_ID_KEY = "install_id"
     private const val NAME_MAX_LEN = 80

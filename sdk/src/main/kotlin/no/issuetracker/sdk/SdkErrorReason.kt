@@ -1,4 +1,4 @@
-package io.issuetracker.sdk
+package no.issuetracker.sdk
 
 import org.json.JSONObject
 

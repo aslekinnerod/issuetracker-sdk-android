@@ -1,8 +1,8 @@
-package io.issuetracker.sdk.internal
+package no.issuetracker.sdk.internal
 
 import android.content.Context
 import android.content.SharedPreferences
-import io.issuetracker.sdk.SdkErrorReason
+import no.issuetracker.sdk.SdkErrorReason
 
 /**
  * One-way SDK lifecycle state. See ADR-0003 Decision 9.
@@ -23,7 +23,7 @@ import io.issuetracker.sdk.SdkErrorReason
  * has already told us is gone.
  */
 internal object LifecycleStore {
-    private const val PREFS_NAME = "io.issuetracker.sdk.lifecycle"
+    private const val PREFS_NAME = "no.issuetracker.sdk.lifecycle"
     private const val REASON_KEY = "terminated_reason"
     private const val AT_KEY = "terminated_at"
 

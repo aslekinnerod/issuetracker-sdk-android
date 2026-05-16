@@ -1,7 +1,7 @@
-package io.issuetracker.sample
+package no.issuetracker.sample
 
 import android.app.Application
-import io.issuetracker.sdk.Issuetracker
+import no.issuetracker.sdk.Issuetracker
 
 class SampleApplication : Application() {
     override fun onCreate() {

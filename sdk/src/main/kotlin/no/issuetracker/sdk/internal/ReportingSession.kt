@@ -1,10 +1,10 @@
-package io.issuetracker.sdk.internal
+package no.issuetracker.sdk.internal
 
 import android.content.Intent
 import android.graphics.Bitmap
-import io.issuetracker.sdk.IssueReportType
-import io.issuetracker.sdk.Runtime
-import io.issuetracker.sdk.ui.ReportActivity
+import no.issuetracker.sdk.IssueReportType
+import no.issuetracker.sdk.Runtime
+import no.issuetracker.sdk.ui.ReportActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

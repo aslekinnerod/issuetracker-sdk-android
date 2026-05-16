@@ -1,7 +1,7 @@
-package io.issuetracker.sdk.internal
+package no.issuetracker.sdk.internal
 
-import io.issuetracker.sdk.SdkErrorDetails
-import io.issuetracker.sdk.SdkErrorReason
+import no.issuetracker.sdk.SdkErrorDetails
+import no.issuetracker.sdk.SdkErrorReason
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject

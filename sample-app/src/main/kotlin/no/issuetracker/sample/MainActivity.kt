@@ -1,4 +1,4 @@
-package io.issuetracker.sample
+package no.issuetracker.sample
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -21,7 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import io.issuetracker.sdk.Issuetracker
+import no.issuetracker.sdk.Issuetracker
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

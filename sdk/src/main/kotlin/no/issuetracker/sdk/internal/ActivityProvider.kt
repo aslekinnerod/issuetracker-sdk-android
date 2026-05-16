@@ -1,4 +1,4 @@
-package io.issuetracker.sdk.internal
+package no.issuetracker.sdk.internal
 
 import android.app.Activity
 import android.app.Application

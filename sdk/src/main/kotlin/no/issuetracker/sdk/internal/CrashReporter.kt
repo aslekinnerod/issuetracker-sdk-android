@@ -1,7 +1,7 @@
-package io.issuetracker.sdk.internal
+package no.issuetracker.sdk.internal
 
 import android.app.Application
-import io.issuetracker.sdk.Runtime
+import no.issuetracker.sdk.Runtime
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

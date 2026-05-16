@@ -5,8 +5,8 @@ plugins {
     alias(libs.plugins.maven.publish)
 }
 
-group = "io.issuetracker"
-version = "0.4.0"
+group = "no.issuetracker"
+version = "0.4.1"
 
 // The Vanniktech plugin reads credentials from Gradle properties
 // `mavenCentralUsername` / `mavenCentralPassword` and signing key
@@ -22,7 +22,7 @@ mavenPublishing {
     publishToMavenCentral(automaticRelease = true)
     signAllPublications()
 
-    coordinates("io.issuetracker", "sdk", project.version.toString())
+    coordinates("no.issuetracker", "sdk", project.version.toString())
 
     pom {
         name.set("Issuetracker SDK for Android")
@@ -53,7 +53,7 @@ mavenPublishing {
 }
 
 android {
-    namespace = "io.issuetracker.sdk"
+    namespace = "no.issuetracker.sdk"
     compileSdk = 36
 
     defaultConfig {

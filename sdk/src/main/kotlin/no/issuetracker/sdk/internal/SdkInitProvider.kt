@@ -1,4 +1,4 @@
-package io.issuetracker.sdk.internal
+package no.issuetracker.sdk.internal
 
 import android.content.ContentProvider
 import android.content.ContentValues
@@ -12,7 +12,7 @@ import android.net.Uri
  * pattern Firebase, WorkManager, etc. use to avoid forcing the host
  * to wire up initialization.
  *
- * Manifest authority is `${applicationId}.io.issuetracker.sdk.init`
+ * Manifest authority is `${applicationId}.no.issuetracker.sdk.init`
  * so two apps using the SDK can coexist on the same device without
  * authority collision.
  */

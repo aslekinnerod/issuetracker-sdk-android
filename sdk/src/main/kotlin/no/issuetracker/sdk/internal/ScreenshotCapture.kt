@@ -1,4 +1,4 @@
-package io.issuetracker.sdk.internal
+package no.issuetracker.sdk.internal
 
 import android.graphics.Bitmap
 import android.os.Handler

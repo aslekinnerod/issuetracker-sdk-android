@@ -1,4 +1,4 @@
-package io.issuetracker.sdk.ui
+package no.issuetracker.sdk.ui
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -9,9 +9,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import io.issuetracker.sdk.internal.LifecycleStore
-import io.issuetracker.sdk.internal.ReporterIdentity
-import io.issuetracker.sdk.internal.ReportingSession
+import no.issuetracker.sdk.internal.LifecycleStore
+import no.issuetracker.sdk.internal.ReporterIdentity
+import no.issuetracker.sdk.internal.ReportingSession
 
 /**
  * Hosts the reporter UI on top of the host app. Translucent theme so

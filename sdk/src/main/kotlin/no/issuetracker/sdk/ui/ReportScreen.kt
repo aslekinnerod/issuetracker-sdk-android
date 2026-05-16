@@ -1,4 +1,4 @@
-package io.issuetracker.sdk.ui
+package no.issuetracker.sdk.ui
 
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
@@ -41,11 +41,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
-import io.issuetracker.sdk.IssueReportType
-import io.issuetracker.sdk.Runtime
-import io.issuetracker.sdk.internal.LifecycleStore
-import io.issuetracker.sdk.internal.ReporterIdentity
-import io.issuetracker.sdk.internal.ReportingSession
+import no.issuetracker.sdk.IssueReportType
+import no.issuetracker.sdk.Runtime
+import no.issuetracker.sdk.internal.LifecycleStore
+import no.issuetracker.sdk.internal.ReporterIdentity
+import no.issuetracker.sdk.internal.ReportingSession
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)

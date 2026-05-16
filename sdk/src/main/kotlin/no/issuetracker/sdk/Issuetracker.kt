@@ -1,14 +1,14 @@
-package io.issuetracker.sdk
+package no.issuetracker.sdk
 
 import android.app.Application
-import io.issuetracker.sdk.internal.ActivityProvider
-import io.issuetracker.sdk.internal.BreadcrumbStore
-import io.issuetracker.sdk.internal.CrashReporter
-import io.issuetracker.sdk.internal.LifecycleStore
-import io.issuetracker.sdk.internal.LongPressObserver
-import io.issuetracker.sdk.internal.ReporterIdentity
-import io.issuetracker.sdk.internal.ReportingSession
-import io.issuetracker.sdk.internal.ShakeObserver
+import no.issuetracker.sdk.internal.ActivityProvider
+import no.issuetracker.sdk.internal.BreadcrumbStore
+import no.issuetracker.sdk.internal.CrashReporter
+import no.issuetracker.sdk.internal.LifecycleStore
+import no.issuetracker.sdk.internal.LongPressObserver
+import no.issuetracker.sdk.internal.ReporterIdentity
+import no.issuetracker.sdk.internal.ReportingSession
+import no.issuetracker.sdk.internal.ShakeObserver
 
 /**
  * Public facade for the Issuetracker SDK. Apps integrate by calling

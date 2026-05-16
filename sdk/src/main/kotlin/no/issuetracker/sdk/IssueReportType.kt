@@ -1,4 +1,4 @@
-package io.issuetracker.sdk
+package no.issuetracker.sdk
 
 /**
  * Issue classification sent to the server. [wireValue] matches the
