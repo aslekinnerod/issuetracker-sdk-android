@@ -2,11 +2,55 @@ plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-    `maven-publish`
+    alias(libs.plugins.maven.publish)
 }
 
 group = "io.issuetracker"
 version = "0.4.0"
+
+// The Vanniktech plugin reads credentials from Gradle properties
+// `mavenCentralUsername` / `mavenCentralPassword` and signing key
+// material from `signingInMemoryKey` / `signingInMemoryKeyPassword`.
+// In CI these come from environment variables prefixed with
+// `ORG_GRADLE_PROJECT_` — see .github/workflows/publish.yml.
+mavenPublishing {
+    // Sonatype Central Portal endpoint (new system, replaces OSSRH).
+    // `automaticRelease = true` skips the manual "Release" click in the
+    // Sonatype UI — once the staging repo passes validation, the
+    // artifacts are promoted to Maven Central immediately. Disable
+    // if you want a manual gate per release.
+    publishToMavenCentral(automaticRelease = true)
+    signAllPublications()
+
+    coordinates("io.issuetracker", "sdk", project.version.toString())
+
+    pom {
+        name.set("Issuetracker SDK for Android")
+        description.set("Drop-in issue reporter SDK for Android apps. Shake the device or call Issuetracker.report() to capture a screenshot and file an issue.")
+        inceptionYear.set("2026")
+        url.set("https://github.com/aslekinnerod/issuetracker-sdk-android")
+        licenses {
+            license {
+                name.set("MIT License")
+                url.set("https://opensource.org/licenses/MIT")
+                distribution.set("https://opensource.org/licenses/MIT")
+            }
+        }
+        developers {
+            developer {
+                id.set("aslekinnerod")
+                name.set("Asle Kinnerod")
+                email.set("asle78@gmail.com")
+                url.set("https://github.com/aslekinnerod")
+            }
+        }
+        scm {
+            url.set("https://github.com/aslekinnerod/issuetracker-sdk-android")
+            connection.set("scm:git:git://github.com/aslekinnerod/issuetracker-sdk-android.git")
+            developerConnection.set("scm:git:ssh://git@github.com/aslekinnerod/issuetracker-sdk-android.git")
+        }
+    }
+}
 
 android {
     namespace = "io.issuetracker.sdk"
@@ -52,15 +96,7 @@ dependencies {
     testImplementation(libs.junit)
 }
 
-// Lets the React Native + Flutter wrappers consume the SDK from
-// mavenLocal during development:
-//   ./gradlew :sdk:publishToMavenLocal
-publishing {
-    publications {
-        register<MavenPublication>("release") {
-            groupId = "io.issuetracker"
-            artifactId = "sdk"
-            afterEvaluate { from(components["release"]) }
-        }
-    }
-}
+// `./gradlew :sdk:publishToMavenLocal` still works during local
+// development (handled by the maven-publish plugin pulled in
+// transitively via vanniktech). The Maven Central publication is
+// configured above via mavenPublishing { ... }.
