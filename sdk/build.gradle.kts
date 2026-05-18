@@ -84,6 +84,13 @@ android {
     buildFeatures {
         compose = true
     }
+    // Robolectric needs Android resources on the unit-test classpath to
+    // emulate Context + SharedPreferences. The default is `false`.
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
 }
 
 dependencies {
@@ -98,6 +105,11 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.tooling.preview)
     testImplementation(libs.junit)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
+    // Real org.json on the JVM test classpath. The Android SDK stubs
+    // throw at runtime so unit tests need the actual library.
+    testImplementation(libs.json)
 }
 
 // `./gradlew :sdk:publishToMavenLocal` still works during local

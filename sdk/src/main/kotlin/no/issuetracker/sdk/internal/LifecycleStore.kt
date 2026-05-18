@@ -74,4 +74,15 @@ internal object LifecycleStore {
             ?.apply()
         callback?.invoke(reason)
     }
+
+    /**
+     * Test-only — clears the in-memory singleton state so each test
+     * case starts from a clean slate. The on-disk SharedPreferences
+     * are not touched here; tests should clear them with
+     * `prefs.edit().clear().commit()` if needed.
+     */
+    internal fun resetForTesting() {
+        prefs = null
+        state = State.Ok
+    }
 }
