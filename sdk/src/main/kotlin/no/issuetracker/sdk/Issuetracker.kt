@@ -60,8 +60,15 @@ object Issuetracker {
         enableCrashReporting: Boolean = true,
         onConfigurationError: ((SdkErrorReason) -> Unit)? = null,
         showOnboarding: Boolean = false,
+        terminatedUI: TerminatedUiStrings? = null,
     ) {
-        val rt = Runtime(application, apiKey, Runtime.resolveEndpoint(apiKey), onConfigurationError)
+        val rt = Runtime(
+            application = application,
+            apiKey = apiKey,
+            endpoint = Runtime.resolveEndpoint(apiKey),
+            onConfigurationError = onConfigurationError,
+            terminatedUI = terminatedUI,
+        )
         runtime = rt
         ActivityProvider.install(application)
         // ReporterIdentity + BreadcrumbStore are auto-installed by
@@ -170,6 +177,24 @@ object Issuetracker {
     }
 }
 
+/**
+ * Strings shown when the SDK has been terminated and a test-cohort
+ * user opens the reporting surface. ADR-0003 Decision 9 mandates a
+ * localised terminal message; English is the built-in default, and
+ * host apps may inject translations via `Issuetracker.configure(...)`.
+ *
+ * Each field is optional — fields the host doesn't override fall back
+ * to English. A missing instance falls back to all-English.
+ */
+data class TerminatedUiStrings(
+    /** Big headline. Default: "Bug reporting is no longer available." */
+    val title: String? = null,
+    /** One-line follow-up. Default: "Contact your team." */
+    val subtitle: String? = null,
+    /** Close-button label. Default: "Close". */
+    val closeLabel: String? = null,
+)
+
 internal data class Runtime(
     val application: Application,
     val apiKey: String,
@@ -178,6 +203,7 @@ internal data class Runtime(
     // here (rather than in LifecycleStore) because it's a configure-
     // time setting that the user owns; the store is the state machine.
     val onConfigurationError: ((SdkErrorReason) -> Unit)? = null,
+    val terminatedUI: TerminatedUiStrings? = null,
 ) {
     companion object {
         // Routing is derived from the key prefix so integrators never

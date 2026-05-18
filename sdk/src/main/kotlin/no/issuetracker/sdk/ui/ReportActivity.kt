@@ -40,7 +40,10 @@ internal class ReportActivity : ComponentActivity() {
                     // straight to the terminal view without a re-trigger.
                     var terminated by remember { mutableStateOf(LifecycleStore.isTerminated) }
                     if (terminated) {
-                        TerminatedScreen(onClose = { finish() })
+                        TerminatedScreen(
+                            strings = runtime.terminatedUI,
+                            onClose = { finish() },
+                        )
                     } else {
                         var showNamePrompt by remember { mutableStateOf(ReporterIdentity.name == null) }
                         if (showNamePrompt) {
