@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "no.issuetracker"
-version = "0.4.1"
+version = "0.5.0"
 
 // The Vanniktech plugin reads credentials from Gradle properties
 // `mavenCentralUsername` / `mavenCentralPassword` and signing key

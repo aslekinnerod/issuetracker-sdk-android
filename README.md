@@ -41,6 +41,26 @@ Both gestures are enabled by default. Disable individually via `shakeToReport = 
 
 The SDK talks to Issuetracker's hosted backend — there is no endpoint to configure. Staging-prefixed keys (`it_staging_…`) are routed to the staging environment automatically; everything else hits production.
 
+## First-run onboarding (optional)
+
+Opt-in popover shown on first launch that teaches the user which gestures trigger the reporter:
+
+```kotlin
+Issuetracker.configure(
+    application = this,
+    apiKey = "it_xxx…",
+    showOnboarding = true,
+)
+```
+
+Shown once per install (persisted in `SharedPreferences`). Only renders illustrations for gestures that are actually enabled — disable shake or long-press and that tile drops out. If both are disabled, the popover is skipped entirely.
+
+Re-present from your own settings screen ("Show introduction again"):
+
+```kotlin
+Button(onClick = { Issuetracker.showOnboarding() }) { Text("Show introduction again") }
+```
+
 ## Manual trigger
 
 ```kotlin

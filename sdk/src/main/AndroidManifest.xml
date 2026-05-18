@@ -11,6 +11,12 @@
             android:theme="@style/Theme.IssuetrackerSdk.Reporter"
             android:configChanges="orientation|screenSize|keyboardHidden|uiMode" />
 
+        <activity
+            android:name=".ui.OnboardingActivity"
+            android:exported="false"
+            android:theme="@style/Theme.IssuetrackerSdk.Reporter"
+            android:configChanges="orientation|screenSize|keyboardHidden|uiMode" />
+
         <provider
             android:name=".internal.SdkInitProvider"
             android:authorities="${applicationId}.no.issuetracker.sdk.init"

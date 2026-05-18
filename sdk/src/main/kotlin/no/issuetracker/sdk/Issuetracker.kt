@@ -6,6 +6,8 @@ import no.issuetracker.sdk.internal.BreadcrumbStore
 import no.issuetracker.sdk.internal.CrashReporter
 import no.issuetracker.sdk.internal.LifecycleStore
 import no.issuetracker.sdk.internal.LongPressObserver
+import no.issuetracker.sdk.internal.OnboardingPresenter
+import no.issuetracker.sdk.internal.OnboardingStore
 import no.issuetracker.sdk.internal.ReporterIdentity
 import no.issuetracker.sdk.internal.ReportingSession
 import no.issuetracker.sdk.internal.ShakeObserver
@@ -38,6 +40,15 @@ object Issuetracker {
      *   will not call the report endpoint again for the lifetime of
      *   this install — recovery requires a fresh [configure] call
      *   (typically an app relaunch). See ADR-0003 Decision 9.
+     * @param showOnboarding If `true`, presents a one-time popover on
+     *   first launch that teaches the user which gestures trigger the
+     *   reporter — only the gestures currently enabled are shown.
+     *   Persisted per install via SharedPreferences, so the popover
+     *   never appears twice unless the host app calls [showOnboarding]
+     *   explicitly. With both `shakeToReport` and `longPressToReport`
+     *   disabled the popover is silently skipped — there's nothing to
+     *   teach. Defaults to `false` so existing integrators are
+     *   unaffected.
      */
     @JvmStatic
     @JvmOverloads
@@ -48,6 +59,7 @@ object Issuetracker {
         longPressToReport: Boolean = true,
         enableCrashReporting: Boolean = true,
         onConfigurationError: ((SdkErrorReason) -> Unit)? = null,
+        showOnboarding: Boolean = false,
     ) {
         val rt = Runtime(application, apiKey, Runtime.resolveEndpoint(apiKey), onConfigurationError)
         runtime = rt
@@ -61,6 +73,7 @@ object Issuetracker {
         // installing here rehydrates any prior TERMINATED state before
         // triggers are wired so the pre-flight gate is authoritative.
         LifecycleStore.install(application)
+        OnboardingStore.install(application)
         if (shakeToReport) {
             ShakeObserver.install(application) { report() }
         }
@@ -74,6 +87,42 @@ object Issuetracker {
             CrashReporter.reportCrashIfAny(rt)
             CrashReporter.install(application)
         }
+        if (showOnboarding) {
+            OnboardingPresenter.presentIfNeeded(
+                application = application,
+                shakeEnabled = shakeToReport,
+                longPressEnabled = longPressToReport,
+            )
+        }
+        // Capture the enabled-trigger snapshot for showOnboarding()
+        // so a single source of truth governs both runtime behaviour
+        // and onboarding content.
+        enabledTriggers = EnabledTriggers(
+            shake = shakeToReport,
+            longPress = longPressToReport,
+        )
+    }
+
+    @Volatile
+    private var enabledTriggers: EnabledTriggers = EnabledTriggers(false, false)
+
+    private data class EnabledTriggers(val shake: Boolean, val longPress: Boolean)
+
+    /**
+     * Re-presents the onboarding popover regardless of whether it has
+     * been shown before on this install. Intended for a "Show
+     * introduction again"-style entry in the host app's own settings
+     * screen. Calling this with no triggers enabled is a no-op. Must
+     * be called after [configure].
+     */
+    @JvmStatic
+    fun showOnboarding() {
+        val rt = runtime ?: return
+        OnboardingPresenter.presentForced(
+            application = rt.application,
+            shakeEnabled = enabledTriggers.shake,
+            longPressEnabled = enabledTriggers.longPress,
+        )
     }
 
     /** Programmatic trigger — useful for a "report a bug" button. */
