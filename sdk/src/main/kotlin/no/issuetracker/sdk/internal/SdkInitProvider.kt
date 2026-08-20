@@ -21,6 +21,9 @@ internal class SdkInitProvider : ContentProvider() {
         val ctx = context?.applicationContext ?: return false
         ReporterIdentity.install(ctx)
         BreadcrumbStore.install(ctx)
+        // Prefs-only: lets setTesterToken()/clearTesterToken() work
+        // pre-configure too. Config seeding happens in configure().
+        AttestationStore.installPrefs(ctx)
         return true
     }
 

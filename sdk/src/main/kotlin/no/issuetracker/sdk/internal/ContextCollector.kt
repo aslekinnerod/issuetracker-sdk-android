@@ -17,6 +17,10 @@ internal object ContextCollector {
         out.put("platform", "Android")
         out.put("osVersion", Build.VERSION.RELEASE ?: "")
         out.put("deviceModel", "${Build.MANUFACTURER} ${Build.MODEL}".trim())
+        // TV reports triage differently (remote input, no touch), so
+        // stamp the form factor when we're on one. Absent on phones —
+        // the wire schema's context map is free-form.
+        if (FormFactor.isTelevision(context)) out.put("formFactor", "tv")
         out.put("locale", Locale.getDefault().toLanguageTag())
         out.put("timeZone", TimeZone.getDefault().id)
         out.put("appBundleId", context.packageName)

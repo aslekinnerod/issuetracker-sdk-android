@@ -19,6 +19,7 @@ class SdkErrorReasonTest {
 
     @Test
     fun `all canonical reasons present with correct raw values`() {
+        // ADR-0003 Decision 9 + the ADR-0005 tester-gating reasons.
         val canonical = setOf(
             "project_deleted",
             "project_not_found",
@@ -27,6 +28,8 @@ class SdkErrorReasonTest {
             "invalid_api_key",
             "quota_exceeded",
             "transient",
+            "tester_attestation_required",
+            "tester_token_invalid",
         )
         val actual = SdkErrorReason.entries.map { it.rawValue }.toSet()
         assertEquals(canonical, actual)
@@ -52,6 +55,23 @@ class SdkErrorReasonTest {
         assertFalse(SdkErrorReason.API_KEY_REVOKED.isRecoverable)
         assertFalse(SdkErrorReason.WORKSPACE_SUSPENDED.isRecoverable)
         assertFalse(SdkErrorReason.INVALID_API_KEY.isRecoverable)
+        assertFalse(SdkErrorReason.TESTER_ATTESTATION_REQUIRED.isRecoverable)
+        assertFalse(SdkErrorReason.TESTER_TOKEN_INVALID.isRecoverable)
+    }
+
+    @Test
+    fun `tester gating reasons are non-terminal`() {
+        // ADR-0005: non-recoverable but NOT terminal — the SDK must
+        // never transition to TERMINATED on a tester-gating rejection.
+        assertFalse(SdkErrorReason.TESTER_ATTESTATION_REQUIRED.isTerminal)
+        assertFalse(SdkErrorReason.TESTER_TOKEN_INVALID.isTerminal)
+        assertFalse(SdkErrorReason.QUOTA_EXCEEDED.isTerminal)
+        assertFalse(SdkErrorReason.TRANSIENT.isTerminal)
+        assertTrue(SdkErrorReason.PROJECT_DELETED.isTerminal)
+        assertTrue(SdkErrorReason.PROJECT_NOT_FOUND.isTerminal)
+        assertTrue(SdkErrorReason.API_KEY_REVOKED.isTerminal)
+        assertTrue(SdkErrorReason.WORKSPACE_SUSPENDED.isTerminal)
+        assertTrue(SdkErrorReason.INVALID_API_KEY.isTerminal)
     }
 
     @Test

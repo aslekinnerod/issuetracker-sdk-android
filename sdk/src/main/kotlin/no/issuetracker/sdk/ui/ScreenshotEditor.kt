@@ -5,7 +5,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,6 +15,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -39,6 +40,10 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.paneTitle
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -74,7 +79,8 @@ internal fun ScreenshotEditor(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF111111)),
+            .background(Color(0xFF111111))
+            .semantics { paneTitle = "Edit screenshot" },
     ) {
         Row(
             modifier = Modifier
@@ -126,7 +132,7 @@ internal fun ScreenshotEditor(
             ) {
                 Image(
                     bitmap = bitmap.asImageBitmap(),
-                    contentDescription = null,
+                    contentDescription = "Screenshot being annotated",
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -154,22 +160,30 @@ internal fun ScreenshotEditor(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
+                .padding(12.dp)
+                .selectableGroup(),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             palette.forEach { c ->
+                // 48dp touch target with the 32dp swatch drawn inside.
                 Box(
                     modifier = Modifier
-                        .size(32.dp)
+                        .size(48.dp)
+                        .selectable(
+                            selected = c == color,
+                            onClick = { color = c },
+                            role = Role.RadioButton,
+                        )
+                        .semantics { contentDescription = colorName(c) }
+                        .padding(8.dp)
                         .clip(CircleShape)
                         .background(c)
                         .border(
                             width = if (c == color) 3.dp else 0.dp,
                             color = Color.White,
                             shape = CircleShape,
-                        )
-                        .clickable { color = c },
+                        ),
                 )
             }
             TextButton(
@@ -183,6 +197,16 @@ internal fun ScreenshotEditor(
 }
 
 private data class EditorStroke(val color: Color, val points: MutableList<Offset>)
+
+/** Accessible name for a palette swatch (TalkBack has no other cue). */
+private fun colorName(c: Color): String = when (c.toArgb()) {
+    0xFFE53935.toInt() -> "Red"
+    0xFFFB8C00.toInt() -> "Orange"
+    0xFFFDD835.toInt() -> "Yellow"
+    0xFF43A047.toInt() -> "Green"
+    0xFF1E88E5.toInt() -> "Blue"
+    else -> "Color"
+}
 
 private fun rasterize(bitmap: Bitmap, strokes: List<EditorStroke>, canvasSize: IntSize): Bitmap {
     if (strokes.isEmpty() || canvasSize.width == 0 || canvasSize.height == 0) return bitmap

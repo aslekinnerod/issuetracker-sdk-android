@@ -5,11 +5,14 @@
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application>
+        <!-- fontScale|density|locale: Compose re-reads these without an
+             activity recreation; recreating would destroy the one-shot
+             ReportingSession handoff and the user's draft (audit M-3). -->
         <activity
             android:name=".ui.ReportActivity"
             android:exported="false"
             android:theme="@style/Theme.IssuetrackerSdk.Reporter"
-            android:configChanges="orientation|screenSize|keyboardHidden|uiMode" />
+            android:configChanges="orientation|screenSize|keyboardHidden|uiMode|fontScale|density|locale" />
 
         <activity
             android:name=".ui.OnboardingActivity"

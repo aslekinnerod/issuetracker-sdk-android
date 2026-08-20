@@ -4,6 +4,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import no.issuetracker.sdk.IssueReportType
 import no.issuetracker.sdk.Runtime
+import no.issuetracker.sdk.SdkErrorReason
 import no.issuetracker.sdk.ui.ReportActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -68,6 +69,11 @@ internal object ReportingSession {
             payload.put("context", ContextCollector.collect(runtime.application))
             payload.put("reporter", ReporterIdentity.payload())
             if (description.isNotEmpty()) payload.put("description", description)
+            // Attach attestation whenever we hold a token — in open
+            // mode it still stamps the report with the tester's
+            // identity (ADR-0005 Decision 5); in testers-only mode
+            // it's what gets us past ingest.
+            AttestationStore.testerToken?.let { payload.put("testerToken", it) }
             if (screenshot != null) {
                 val baos = ByteArrayOutputStream()
                 screenshot.compress(Bitmap.CompressFormat.JPEG, 85, baos)
@@ -97,13 +103,25 @@ internal object ReportingSession {
             val result = ApiClient.call(runtime.endpoint, "createIssueFromSdk", payload)
             Result.success(result)
         } catch (e: ApiException) {
-            // ADR-0003 Decision 9: non-recoverable failures flip the
-            // SDK into one-way TERMINATED. The user sees this submit's
+            val reason = e.sdkErrorReason
+            // Tester-gating rejections (ADR-0005) are non-recoverable
+            // but NOT terminal — the project is alive, this install
+            // just lacks valid attestation. Drop any stale token and
+            // re-pull config so the gesture triggers go inert; the
+            // user sees the server's message in the current activity.
+            if (reason != null && reason.isTesterGating) {
+                if (reason == SdkErrorReason.TESTER_TOKEN_INVALID) {
+                    AttestationStore.clearTesterToken()
+                }
+                scope.launch { AttestationStore.refreshRemoteConfig(runtime) }
+                return Result.failure(e)
+            }
+            // ADR-0003 Decision 9: terminal failures flip the SDK
+            // into one-way TERMINATED. The user sees this submit's
             // error message in the current activity; the next trigger
             // (shake / long-press / programmatic) will hit the
             // pre-flight gate in present() and surface TerminatedScreen.
-            val reason = e.sdkErrorReason
-            if (reason != null && !reason.isRecoverable) {
+            if (reason != null && reason.isTerminal) {
                 LifecycleStore.transitionToTerminated(reason, runtime.onConfigurationError)
             }
             Result.failure(e)

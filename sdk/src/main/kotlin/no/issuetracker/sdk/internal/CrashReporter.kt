@@ -62,6 +62,11 @@ internal object CrashReporter {
                 payload.put("context", ContextCollector.collect(rt.application))
                 payload.put("reporter", ReporterIdentity.payload())
                 payload.put("crashReport", crashJson)
+                // Auto crash reports carry attestation too — on
+                // testers-only projects an unattested crash report is
+                // (correctly) rejected at ingest and dropped silently
+                // by the catch below.
+                AttestationStore.testerToken?.let { payload.put("testerToken", it) }
                 if (crumbs.isNotEmpty()) {
                     val arr = JSONArray()
                     crumbs.forEach { c ->

@@ -24,6 +24,7 @@ internal class OnboardingActivity : ComponentActivity() {
     companion object {
         const val EXTRA_SHAKE_ENABLED = "shake_enabled"
         const val EXTRA_LONG_PRESS_ENABLED = "long_press_enabled"
+        const val EXTRA_REMOTE_ENABLED = "remote_enabled"
         const val EXTRA_MARK_SHOWN = "mark_shown"
     }
 
@@ -31,6 +32,7 @@ internal class OnboardingActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val shakeEnabled = intent.getBooleanExtra(EXTRA_SHAKE_ENABLED, false)
         val longPressEnabled = intent.getBooleanExtra(EXTRA_LONG_PRESS_ENABLED, false)
+        val remoteEnabled = intent.getBooleanExtra(EXTRA_REMOTE_ENABLED, false)
         val markShownAfter = intent.getBooleanExtra(EXTRA_MARK_SHOWN, true)
 
         setContent {
@@ -39,6 +41,7 @@ internal class OnboardingActivity : ComponentActivity() {
                     OnboardingScreen(
                         showsShake = shakeEnabled,
                         showsLongPress = longPressEnabled,
+                        showsRemote = remoteEnabled,
                         onDismiss = {
                             if (markShownAfter) OnboardingStore.markShown()
                             finish()

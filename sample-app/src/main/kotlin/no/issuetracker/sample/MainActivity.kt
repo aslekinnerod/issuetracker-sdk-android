@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -41,6 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -82,6 +84,7 @@ private fun SampleScreen() {
         ) {
             LifecycleSection()
             ReportingSection()
+            AccessibilitySection()
             IdentitySection()
             BreadcrumbSection()
             OnboardingSection()
@@ -167,6 +170,77 @@ private fun ReportingSection() {
             onClick = { Issuetracker.report() },
             modifier = Modifier.fillMaxWidth(),
         ) { Text("Report a bug") }
+    }
+}
+
+/**
+ * ADR-0008 opt-in accessible entry points. Both toggles persist to
+ * SharedPreferences and re-run `Issuetracker.configure(...)` on flip,
+ * demonstrating the live re-configure semantics — no restart needed.
+ */
+@Composable
+private fun AccessibilitySection() {
+    val context = LocalContext.current
+    val app = context.applicationContext as Application
+    val prefs = remember { samplePrefs(app) }
+    var accessibilityAction by remember {
+        mutableStateOf(prefs.getBoolean(SampleApplication.PREF_ACCESSIBILITY_ACTION, false))
+    }
+    var showReportButton by remember {
+        mutableStateOf(prefs.getBoolean(SampleApplication.PREF_SHOW_REPORT_BUTTON, false))
+    }
+
+    fun persistAndReconfigure(key: String, value: Boolean) {
+        prefs.edit().putBoolean(key, value).apply()
+        // Live re-configure — the SDK applies the flags immediately.
+        SampleApplication.configureSdk(app)
+    }
+
+    SectionCard(
+        title = "Accessibility",
+        subtitle = "ADR-0008 opt-in triggers. Applied live via re-configure() — no restart. " +
+            "The TalkBack action only appears while a screen reader with touch exploration is on.",
+    ) {
+        ToggleRow(
+            label = "TalkBack action “Report a bug”",
+            checked = accessibilityAction,
+            onCheckedChange = { v ->
+                accessibilityAction = v
+                persistAndReconfigure(SampleApplication.PREF_ACCESSIBILITY_ACTION, v)
+            },
+        )
+        ToggleRow(
+            label = "Floating Report button",
+            checked = showReportButton,
+            onCheckedChange = { v ->
+                showReportButton = v
+                persistAndReconfigure(SampleApplication.PREF_SHOW_REPORT_BUTTON, v)
+            },
+        )
+    }
+}
+
+@Composable
+private fun ToggleRow(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+        modifier = Modifier
+            .fillMaxWidth()
+            .toggleable(
+                value = checked,
+                role = Role.Switch,
+                onValueChange = onCheckedChange,
+            ),
+    ) {
+        Text(label)
+        // Row is the toggleable; null keeps a single labeled switch
+        // element for TalkBack.
+        Switch(checked = checked, onCheckedChange = null)
     }
 }
 
@@ -281,18 +355,23 @@ private fun I18nSection() {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .toggleable(
+                    value = useNorwegian,
+                    role = Role.Switch,
+                    onValueChange = { v ->
+                        useNorwegian = v
+                        prefs.edit()
+                            .putBoolean(SampleApplication.PREF_USE_NORWEGIAN_TERMINATED_UI, v)
+                            .apply()
+                    },
+                ),
         ) {
             Text("Norwegian strings")
-            Switch(
-                checked = useNorwegian,
-                onCheckedChange = { v ->
-                    useNorwegian = v
-                    prefs.edit()
-                        .putBoolean(SampleApplication.PREF_USE_NORWEGIAN_TERMINATED_UI, v)
-                        .apply()
-                },
-            )
+            // Row is the toggleable; null keeps a single labeled switch
+            // element for TalkBack.
+            Switch(checked = useNorwegian, onCheckedChange = null)
         }
     }
 }

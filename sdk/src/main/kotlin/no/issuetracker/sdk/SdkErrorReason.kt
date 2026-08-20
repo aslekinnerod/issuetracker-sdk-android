@@ -20,10 +20,30 @@ enum class SdkErrorReason(val rawValue: String) {
     WORKSPACE_SUSPENDED("workspace_suspended"),
     INVALID_API_KEY("invalid_api_key"),
     QUOTA_EXCEEDED("quota_exceeded"),
-    TRANSIENT("transient");
+    TRANSIENT("transient"),
+    TESTER_ATTESTATION_REQUIRED("tester_attestation_required"),
+    TESTER_TOKEN_INVALID("tester_token_invalid");
 
     val isRecoverable: Boolean
         get() = this == QUOTA_EXCEEDED || this == TRANSIENT
+
+    /**
+     * Whether this reason must flip the SDK into one-way TERMINATED.
+     * Tester-gating rejections (ADR-0005) are non-recoverable —
+     * retrying the same request cannot succeed — but NOT terminal:
+     * the project is alive and the key is valid; only this install
+     * lacks (valid) attestation.
+     */
+    val isTerminal: Boolean
+        get() = when (this) {
+            QUOTA_EXCEEDED, TRANSIENT,
+            TESTER_ATTESTATION_REQUIRED, TESTER_TOKEN_INVALID -> false
+            PROJECT_DELETED, PROJECT_NOT_FOUND, API_KEY_REVOKED,
+            WORKSPACE_SUSPENDED, INVALID_API_KEY -> true
+        }
+
+    internal val isTesterGating: Boolean
+        get() = this == TESTER_ATTESTATION_REQUIRED || this == TESTER_TOKEN_INVALID
 
     companion object {
         fun fromRaw(raw: String?): SdkErrorReason? =

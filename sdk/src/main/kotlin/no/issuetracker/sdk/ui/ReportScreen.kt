@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -40,9 +41,19 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.paneTitle
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import no.issuetracker.sdk.IssueReportType
 import no.issuetracker.sdk.Runtime
+import no.issuetracker.sdk.internal.FormFactor
 import no.issuetracker.sdk.internal.LifecycleStore
 import no.issuetracker.sdk.internal.ReporterIdentity
 import no.issuetracker.sdk.internal.ReportingSession
@@ -66,6 +77,12 @@ internal fun ReportScreen(
     var submitting by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val view = LocalView.current
+    val context = LocalContext.current
+    // The screenshot annotation canvas is touch-only; on television
+    // form factors the Edit affordance is hidden (TV_TRIGGERS.md
+    // scope: touch-dependent flows don't exist on TV).
+    val isTv = remember { FormFactor.isTelevision(context) }
     val canSubmit = title.trim().isNotEmpty() && !submitting
 
     if (editing && currentScreenshot != null) {
@@ -81,9 +98,15 @@ internal fun ReportScreen(
     }
 
     Scaffold(
+        modifier = Modifier.semantics { paneTitle = "Report an issue" },
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("Report an issue") },
+                title = {
+                    Text(
+                        "Report an issue",
+                        modifier = Modifier.semantics { heading() },
+                    )
+                },
                 navigationIcon = {
                     TextButton(onClick = onClose) { Text("Cancel") }
                 },
@@ -108,7 +131,10 @@ internal fun ReportScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.weight(1f),
                 )
-                TextButton(onClick = onChangeName) { Text("Not you?") }
+                TextButton(
+                    onClick = onChangeName,
+                    modifier = Modifier.semantics { contentDescription = "Change reporter name" },
+                ) { Text("Not you?") }
             }
 
             TypeSelector(selected = type, onSelect = { type = it })
@@ -132,19 +158,33 @@ internal fun ReportScreen(
 
             currentScreenshot?.let { ss ->
                 Spacer(Modifier.height(12.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Switch(checked = includeScreenshot, onCheckedChange = { includeScreenshot = it })
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .toggleable(
+                            value = includeScreenshot,
+                            role = Role.Switch,
+                            onValueChange = { includeScreenshot = it },
+                        ),
+                ) {
+                    // onCheckedChange = null: the row is the toggleable —
+                    // one focusable "Include screenshot, switch" element.
+                    Switch(checked = includeScreenshot, onCheckedChange = null)
                     Spacer(Modifier.width(8.dp))
                     Text("Include screenshot", modifier = Modifier.weight(1f))
-                    if (includeScreenshot) {
-                        TextButton(onClick = { editing = true }) { Text("Edit") }
+                    if (includeScreenshot && !isTv) {
+                        TextButton(
+                            onClick = { editing = true },
+                            modifier = Modifier.semantics { contentDescription = "Edit screenshot" },
+                        ) { Text("Edit") }
                     }
                 }
                 if (includeScreenshot) {
                     Spacer(Modifier.height(8.dp))
                     Image(
                         bitmap = ss.asImageBitmap(),
-                        contentDescription = null,
+                        contentDescription = "Screenshot preview",
                         contentScale = ContentScale.Fit,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -157,7 +197,11 @@ internal fun ReportScreen(
 
             errorMessage?.let { msg ->
                 Spacer(Modifier.height(12.dp))
-                Text(msg, color = MaterialTheme.colorScheme.error)
+                Text(
+                    "Error: $msg",
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
+                )
             }
 
             Spacer(Modifier.height(20.dp))
@@ -175,7 +219,13 @@ internal fun ReportScreen(
                         )
                         submitting = false
                         result
-                            .onSuccess { onClose() }
+                            .onSuccess {
+                                // The activity finishes immediately, so a
+                                // composable live region would never render;
+                                // announce directly on the host view.
+                                view.announceForAccessibility("Report sent")
+                                onClose()
+                            }
                             .onFailure {
                                 // ADR-0003 Decision 9: if submit
                                 // transitioned the SDK to TERMINATED,
@@ -201,7 +251,10 @@ internal fun ReportScreen(
                         color = MaterialTheme.colorScheme.onPrimary,
                     )
                     Spacer(Modifier.width(8.dp))
-                    Text("Sending…")
+                    Text(
+                        "Sending…",
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                    )
                 } else {
                     Text("Send report")
                 }

@@ -24,31 +24,34 @@ internal object OnboardingPresenter {
         application: Application,
         shakeEnabled: Boolean,
         longPressEnabled: Boolean,
+        remoteEnabled: Boolean = false,
     ) {
         if (OnboardingStore.hasBeenShown) return
-        present(application, shakeEnabled, longPressEnabled, markShownAfter = true)
+        present(application, shakeEnabled, longPressEnabled, remoteEnabled, markShownAfter = true)
     }
 
     fun presentForced(
         application: Application,
         shakeEnabled: Boolean,
         longPressEnabled: Boolean,
+        remoteEnabled: Boolean = false,
     ) {
-        present(application, shakeEnabled, longPressEnabled, markShownAfter = false)
+        present(application, shakeEnabled, longPressEnabled, remoteEnabled, markShownAfter = false)
     }
 
     private fun present(
         application: Application,
         shakeEnabled: Boolean,
         longPressEnabled: Boolean,
+        remoteEnabled: Boolean,
         markShownAfter: Boolean,
     ) {
-        // With both gestures off there is nothing the popover can teach
+        // With every trigger off there is nothing the popover can teach
         // the user — programmatic-only integrations don't need a UI
         // nudge. We still mark "shown" in the configure-time path so
-        // flipping a gesture on later doesn't surprise the user with an
+        // flipping a trigger on later doesn't surprise the user with an
         // out-of-context popover.
-        if (!shakeEnabled && !longPressEnabled) {
+        if (!shakeEnabled && !longPressEnabled && !remoteEnabled) {
             if (markShownAfter) OnboardingStore.markShown()
             return
         }
@@ -57,6 +60,7 @@ internal object OnboardingPresenter {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             putExtra(OnboardingActivity.EXTRA_SHAKE_ENABLED, shakeEnabled)
             putExtra(OnboardingActivity.EXTRA_LONG_PRESS_ENABLED, longPressEnabled)
+            putExtra(OnboardingActivity.EXTRA_REMOTE_ENABLED, remoteEnabled)
             putExtra(OnboardingActivity.EXTRA_MARK_SHOWN, markShownAfter)
         }
         application.startActivity(intent)

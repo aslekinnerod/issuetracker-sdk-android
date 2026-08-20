@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Play/Pause glyph for the TV onboarding tile: triangle + two bars.
+     Vector rather than webp (unlike the shake/long-press tiles) so it
+     stays crisp at TV densities with zero asset weight. Accent color
+     matches OnboardingTokens.accent (#1577AD, WCAG-adjusted). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#1577AD"
+        android:pathData="M4,5 L13,12 L4,19 Z" />
+    <path
+        android:fillColor="#1577AD"
+        android:pathData="M15.5,5 h2.4 v14 h-2.4 Z" />
+    <path
+        android:fillColor="#1577AD"
+        android:pathData="M19.6,5 h2.4 v14 h-2.4 Z" />
+</vector>

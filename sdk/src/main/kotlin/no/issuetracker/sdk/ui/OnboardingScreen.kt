@@ -10,10 +10,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
@@ -26,6 +29,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -44,8 +50,11 @@ internal fun OnboardingScreen(
     showsShake: Boolean,
     showsLongPress: Boolean,
     onDismiss: () -> Unit,
+    showsRemote: Boolean = false,
 ) {
-    val visibleCount = (if (showsShake) 1 else 0) + (if (showsLongPress) 1 else 0)
+    val visibleCount = (if (showsShake) 1 else 0) +
+        (if (showsLongPress) 1 else 0) +
+        (if (showsRemote) 1 else 0)
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = OnboardingTokens.surfaceApp,
@@ -55,65 +64,84 @@ internal fun OnboardingScreen(
                 .fillMaxSize()
                 .padding(horizontal = 24.dp, vertical = 32.dp),
         ) {
-            // Header
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(OnboardingTokens.accentSoft),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = "✓",
-                        color = OnboardingTokens.accent,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.SemiBold,
-                    )
+            // Scrollable content; the primary action stays pinned below
+            // so large font scales scroll instead of clipping.
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                // Header
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(OnboardingTokens.accentSoft)
+                            // Decorative badge — hide "check mark" from TalkBack.
+                            .clearAndSetSemantics {},
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = "✓",
+                            color = OnboardingTokens.accent,
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = "Report bugs from anywhere",
+                            color = OnboardingTokens.fg1,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.semantics { heading() },
+                        )
+                        Text(
+                            text = if (visibleCount == 1) "One quick gesture is all it takes"
+                                   else "Two quick gestures, your choice",
+                            color = OnboardingTokens.fg3,
+                            fontSize = 12.sp,
+                        )
+                    }
                 }
-                Spacer(Modifier.width(12.dp))
-                Column {
-                    Text(
-                        text = "Report bugs from anywhere",
-                        color = OnboardingTokens.fg1,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(
-                        text = if (visibleCount == 1) "One quick gesture is all it takes"
-                               else "Two quick gestures, your choice",
-                        color = OnboardingTokens.fg3,
-                        fontSize = 12.sp,
-                    )
+
+                Spacer(Modifier.height(24.dp))
+
+                // Tiles
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    if (showsShake) {
+                        TriggerTile(
+                            illustration = R.drawable.onboarding_shake,
+                            title = "Shake your phone",
+                            caption = "Shake to open the reporter.",
+                        )
+                    }
+                    if (showsLongPress) {
+                        TriggerTile(
+                            illustration = R.drawable.onboarding_longpress,
+                            title = "Two-finger press",
+                            caption = "Hold with two fingers for 3 seconds.",
+                        )
+                    }
+                    if (showsRemote) {
+                        // TV trigger (TV_TRIGGERS.md copy contract).
+                        TriggerTile(
+                            illustration = R.drawable.onboarding_remote,
+                            title = "Hold Play/Pause on your remote",
+                            caption = "Hold the button for 2 seconds.",
+                        )
+                    }
                 }
             }
 
-            Spacer(Modifier.height(24.dp))
-
-            // Tiles
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                if (showsShake) {
-                    TriggerTile(
-                        illustration = R.drawable.onboarding_shake,
-                        title = "Shake your phone",
-                        caption = "Shake to open the reporter.",
-                    )
-                }
-                if (showsLongPress) {
-                    TriggerTile(
-                        illustration = R.drawable.onboarding_longpress,
-                        title = "Two-finger press",
-                        caption = "Hold with two fingers for 3 seconds.",
-                    )
-                }
-            }
-
-            Spacer(Modifier.fillMaxSize().weight(1f))
+            Spacer(Modifier.height(16.dp))
 
             // Primary action
             Button(
                 onClick = onDismiss,
-                modifier = Modifier.fillMaxWidth().height(48.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = OnboardingTokens.accent,
                     contentColor = Color.White,
@@ -182,7 +210,10 @@ private object OnboardingTokens {
     val surface1 = Color(0xFFEAF0F6)
     val fg1 = Color(0xFF0E1A2B)
     val fg2 = Color(0xFF43536B)
-    val fg3 = Color(0xFF6E7E94)
-    val accent = Color(0xFF1FA2E8)
+    // fg3/accent darkened for WCAG 1.4.3 contrast (audit S-4/S-5):
+    // accent #1577AD gives >= 4.5:1 with white text; fg3 #5A6B82 gives
+    // >= 4.5:1 on surfaceApp. Mirror in the iOS / Web SDK tokens.
+    val fg3 = Color(0xFF5A6B82)
+    val accent = Color(0xFF1577AD)
     val accentSoft = Color(0xFFDDF2FB)
 }

@@ -22,3 +22,4 @@ dependencyResolutionManagement {
 rootProject.name = "issuetracker-sdk-android"
 include(":sdk")
 include(":sample-app")
+include(":sample-tv-app")

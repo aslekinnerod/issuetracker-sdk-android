@@ -1,13 +1,22 @@
 package no.issuetracker.sdk
 
 import android.app.Application
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import no.issuetracker.sdk.internal.AccessibilityActionObserver
 import no.issuetracker.sdk.internal.ActivityProvider
+import no.issuetracker.sdk.internal.AttestationStore
 import no.issuetracker.sdk.internal.BreadcrumbStore
 import no.issuetracker.sdk.internal.CrashReporter
+import no.issuetracker.sdk.internal.FormFactor
 import no.issuetracker.sdk.internal.LifecycleStore
 import no.issuetracker.sdk.internal.LongPressObserver
 import no.issuetracker.sdk.internal.OnboardingPresenter
 import no.issuetracker.sdk.internal.OnboardingStore
+import no.issuetracker.sdk.internal.RemotePressObserver
+import no.issuetracker.sdk.internal.ReportButtonObserver
 import no.issuetracker.sdk.internal.ReporterIdentity
 import no.issuetracker.sdk.internal.ReportingSession
 import no.issuetracker.sdk.internal.ShakeObserver
@@ -20,6 +29,8 @@ import no.issuetracker.sdk.internal.ShakeObserver
  */
 object Issuetracker {
 
+    private val configScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
     @Volatile
     internal var runtime: Runtime? = null
         private set
@@ -31,6 +42,35 @@ object Issuetracker {
      * vs. staging) is derived from the key prefix — there is no
      * endpoint to configure.
      *
+     * @param shakeToReport If `true` (default), a device shake brings
+     *   up the reporter. Inert on television form factors (Android TV,
+     *   Google TV, Fire TV) — there is no shake in the TV trigger
+     *   model. See sdk-spec/TV_TRIGGERS.md.
+     * @param longPressToReport If `true` (default), the platform's
+     *   long-press trigger brings up the reporter: on phones/tablets a
+     *   two-finger press held for 3 seconds; on television form
+     *   factors, holding Play/Pause on the remote for 2 seconds. One
+     *   flag, one meaning — "the platform's long-press trigger".
+     * @param accessibilityAction If `true`, and an accessibility
+     *   service with touch exploration is running (TalkBack), the SDK
+     *   registers a custom accessibility action "Report a bug" on the
+     *   resumed activity so screen-reader users have a gesture-free
+     *   path into the reporter — TalkBack claims multi-finger gestures,
+     *   so the long-press trigger typically never reaches them, and
+     *   shake is motion actuation (WCAG 2.5.4). The action follows the
+     *   activity lifecycle and the live TalkBack state; it adds no
+     *   visible chrome for anyone else. Defaults to `false` so existing
+     *   integrations are unaffected (ADR-0008 Decision 2). Hosts
+     *   enabling gesture triggers should enable this (and/or
+     *   [showReportButton]) or wire their own visible control calling
+     *   [report].
+     * @param showReportButton If `true`, the SDK overlays a small
+     *   floating "Report" button (bottom-end corner) on each resumed
+     *   activity that opens the reporter — the no-code path to a
+     *   visible, single-pointer, motion-free report entry point
+     *   (ADR-0008 Decision 3). Inert on television form factors; TV
+     *   hosts should wire [report] to a settings row instead. Defaults
+     *   to `false`.
      * @param onConfigurationError Optional callback invoked once when
      *   the SDK transitions to the terminated state because the server
      *   signalled a non-recoverable failure (project deleted, API key
@@ -57,6 +97,8 @@ object Issuetracker {
         apiKey: String,
         shakeToReport: Boolean = true,
         longPressToReport: Boolean = true,
+        accessibilityAction: Boolean = false,
+        showReportButton: Boolean = false,
         enableCrashReporting: Boolean = true,
         onConfigurationError: ((SdkErrorReason) -> Unit)? = null,
         showOnboarding: Boolean = false,
@@ -81,12 +123,61 @@ object Issuetracker {
         // triggers are wired so the pre-flight gate is authoritative.
         LifecycleStore.install(application)
         OnboardingStore.install(application)
-        if (shakeToReport) {
-            ShakeObserver.install(application) { report() }
+        // Seed remote config (testers-only gating, ADR-0005) from the
+        // SharedPreferences cache before the observers install, so the
+        // very first gesture consults real data when we have any. The
+        // network refresh runs async below.
+        AttestationStore.install(application, apiKey)
+        // Gesture triggers are gated per-fire rather than at install
+        // time: config can flip while the app runs, and a fire-time
+        // check reconciles instantly with no uninstall plumbing. In
+        // testers-only mode without a token the gestures are silently
+        // inert (ADR-0005 invariant 5). The programmatic report() is
+        // deliberately ungated — a host app's own button should
+        // surface the attestation message instead.
+        //
+        // Form factor decides what the flags mean (TV_TRIGGERS.md):
+        // one artifact serves phones and TVs, so on television
+        // (Android TV / Google TV / Fire TV) `longPressToReport`
+        // installs the hold-Play/Pause remote trigger instead of the
+        // two-finger touch press, and `shakeToReport` is inert —
+        // there is no accelerometer in the TV trigger model.
+        val isTv = FormFactor.isTelevision(application)
+        if (shakeToReport && !isTv) {
+            ShakeObserver.install(application) {
+                if (AttestationStore.canTriggerReport) report()
+            }
         }
         if (longPressToReport) {
-            LongPressObserver.install(application) { report() }
+            if (isTv) {
+                RemotePressObserver.install(application) {
+                    if (AttestationStore.canTriggerReport) report()
+                }
+            } else {
+                LongPressObserver.install(application) {
+                    if (AttestationStore.canTriggerReport) report()
+                }
+            }
         }
+        // ADR-0008: accessible activation paths. Both observers
+        // register their lifecycle callbacks once (like the gesture
+        // observers above); the enabled state is re-evaluated on every
+        // configure() call so a host settings screen can flip the
+        // flags live — enabling attaches to the current activity
+        // immediately, disabling detaches immediately. Both paths call
+        // report() ungated by attestation: they are visible/announced
+        // controls, and — like a host app's own button — should
+        // surface the server's message rather than silently do
+        // nothing. TERMINATED gating happens at attach time inside
+        // the observers (they never re-attach once terminated; the
+        // pre-flight gate in present() covers a mid-session flip).
+        AccessibilityActionObserver.install(application) { report() }
+        AccessibilityActionObserver.setEnabled(application, accessibilityAction)
+        ReportButtonObserver.install(application) { report() }
+        // A floating touch button is meaningless on television form
+        // factors — TV hosts wire report() to a settings row instead
+        // (TV_TRIGGERS.md).
+        ReportButtonObserver.setEnabled(showReportButton && !isTv)
         if (enableCrashReporting) {
             // Fire any pending crash from the previous session BEFORE
             // installing the new heartbeat — order matters so we don't
@@ -94,26 +185,40 @@ object Issuetracker {
             CrashReporter.reportCrashIfAny(rt)
             CrashReporter.install(application)
         }
-        if (showOnboarding) {
-            OnboardingPresenter.presentIfNeeded(
-                application = application,
-                shakeEnabled = shakeToReport,
-                longPressEnabled = longPressToReport,
-            )
+        configScope.launch {
+            AttestationStore.refreshRemoteConfig(rt)
+            // Onboarding waits for the config refresh so we never
+            // advertise gestures that are gated off for this install —
+            // and never wrongly suppress it on a prod key's first
+            // launch just because the fail-closed default was still in
+            // effect.
+            if (showOnboarding && AttestationStore.canTriggerReport) {
+                OnboardingPresenter.presentIfNeeded(
+                    application = application,
+                    shakeEnabled = shakeToReport && !isTv,
+                    longPressEnabled = longPressToReport && !isTv,
+                    remoteEnabled = longPressToReport && isTv,
+                )
+            }
         }
         // Capture the enabled-trigger snapshot for showOnboarding()
         // so a single source of truth governs both runtime behaviour
         // and onboarding content.
         enabledTriggers = EnabledTriggers(
-            shake = shakeToReport,
-            longPress = longPressToReport,
+            shake = shakeToReport && !isTv,
+            longPress = longPressToReport && !isTv,
+            remote = longPressToReport && isTv,
         )
     }
 
     @Volatile
-    private var enabledTriggers: EnabledTriggers = EnabledTriggers(false, false)
+    private var enabledTriggers: EnabledTriggers = EnabledTriggers(false, false, false)
 
-    private data class EnabledTriggers(val shake: Boolean, val longPress: Boolean)
+    private data class EnabledTriggers(
+        val shake: Boolean,
+        val longPress: Boolean,
+        val remote: Boolean,
+    )
 
     /**
      * Re-presents the onboarding popover regardless of whether it has
@@ -129,6 +234,7 @@ object Issuetracker {
             application = rt.application,
             shakeEnabled = enabledTriggers.shake,
             longPressEnabled = enabledTriggers.longPress,
+            remoteEnabled = enabledTriggers.remote,
         )
     }
 
@@ -153,6 +259,31 @@ object Issuetracker {
     @JvmStatic
     fun clearIdentity() {
         ReporterIdentity.clearName()
+    }
+
+    /**
+     * Stores a tester attestation token (ADR-0005). On projects in
+     * testers-only mode this is what unlocks the report triggers and
+     * gets reports past the server; in open mode it stamps reports
+     * with the tester's identity. The token will normally arrive
+     * silently from the companion app's ContentProvider; this API is
+     * the manual injection point until that ships (and for
+     * integration tests). Safe to call before [configure].
+     */
+    @JvmStatic
+    @JvmOverloads
+    fun setTesterToken(token: String, expiresAtMillis: Long? = null) {
+        AttestationStore.setTesterToken(token, expiresAtMillis)
+    }
+
+    /**
+     * Removes the stored tester token. On testers-only projects the
+     * gesture triggers go inert again from the next gesture. Safe to
+     * call before [configure].
+     */
+    @JvmStatic
+    fun clearTesterToken() {
+        AttestationStore.clearTesterToken()
     }
 
     /**

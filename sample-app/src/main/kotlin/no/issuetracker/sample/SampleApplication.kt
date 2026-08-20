@@ -23,50 +23,66 @@ import no.issuetracker.sdk.TerminatedUiStrings
  *      [PREF_USE_NORWEGIAN_TERMINATED_UI] preference.
  *   2. Pre-seed the SharedPreferences before first launch.
  *
- * Flipping the preference requires an app relaunch since `configure()`
- * runs once here.
+ * Flipping the i18n preference requires an app relaunch since the
+ * strings are read here. The accessibility toggles (ADR-0008) are
+ * different: MainActivity re-runs [configureSdk] on flip, so
+ * `accessibilityAction` / `showReportButton` apply live — that's the
+ * re-configure semantics the SDK promises.
  */
 class SampleApplication : Application() {
     override fun onCreate() {
         super.onCreate()
-
-        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-        val useNorwegian = prefs.getBoolean(PREF_USE_NORWEGIAN_TERMINATED_UI, false)
-
-        val terminatedUI: TerminatedUiStrings? = if (useNorwegian) {
-            TerminatedUiStrings(
-                title = "Feilrapportering er ikke lenger tilgjengelig.",
-                subtitle = "Kontakt teamet ditt.",
-                closeLabel = "Lukk",
-            )
-        } else null
-
-        Issuetracker.configure(
-            application = this,
-            apiKey = BuildConfig.SDK_API_KEY,
-            shakeToReport = true,
-            longPressToReport = true,
-            enableCrashReporting = true,
-            showOnboarding = true,
-            onConfigurationError = { reason: SdkErrorReason ->
-                // Persist so the lifecycle section in MainActivity can
-                // show which reason was last received. The SDK has
-                // already transitioned to TERMINATED by the time this
-                // fires.
-                prefs.edit()
-                    .putString(PREF_LAST_CONFIG_ERROR, reason.rawValue)
-                    .putLong(PREF_LAST_CONFIG_ERROR_AT, System.currentTimeMillis())
-                    .apply()
-            },
-            terminatedUI = terminatedUI,
-        )
+        configureSdk(this)
     }
 
     companion object {
         const val PREFS_NAME = "issuetracker.sample"
         const val PREF_USE_NORWEGIAN_TERMINATED_UI = "useNorwegianTerminatedUI"
+        const val PREF_ACCESSIBILITY_ACTION = "accessibilityAction"
+        const val PREF_SHOW_REPORT_BUTTON = "showReportButton"
         const val PREF_LAST_CONFIG_ERROR = "lastConfigError"
         const val PREF_LAST_CONFIG_ERROR_AT = "lastConfigErrorAt"
+
+        /**
+         * Reads the persisted toggles and (re-)configures the SDK.
+         * Called once from [onCreate] and again from MainActivity's
+         * accessibility section whenever a toggle flips — subsequent
+         * `configure()` calls replace the configuration live.
+         */
+        fun configureSdk(application: Application) {
+            val prefs = samplePrefs(application)
+            val useNorwegian = prefs.getBoolean(PREF_USE_NORWEGIAN_TERMINATED_UI, false)
+
+            val terminatedUI: TerminatedUiStrings? = if (useNorwegian) {
+                TerminatedUiStrings(
+                    title = "Feilrapportering er ikke lenger tilgjengelig.",
+                    subtitle = "Kontakt teamet ditt.",
+                    closeLabel = "Lukk",
+                )
+            } else null
+
+            Issuetracker.configure(
+                application = application,
+                apiKey = BuildConfig.SDK_API_KEY,
+                shakeToReport = true,
+                longPressToReport = true,
+                accessibilityAction = prefs.getBoolean(PREF_ACCESSIBILITY_ACTION, false),
+                showReportButton = prefs.getBoolean(PREF_SHOW_REPORT_BUTTON, false),
+                enableCrashReporting = true,
+                showOnboarding = true,
+                onConfigurationError = { reason: SdkErrorReason ->
+                    // Persist so the lifecycle section in MainActivity can
+                    // show which reason was last received. The SDK has
+                    // already transitioned to TERMINATED by the time this
+                    // fires.
+                    prefs.edit()
+                        .putString(PREF_LAST_CONFIG_ERROR, reason.rawValue)
+                        .putLong(PREF_LAST_CONFIG_ERROR_AT, System.currentTimeMillis())
+                        .apply()
+                },
+                terminatedUI = terminatedUI,
+            )
+        }
     }
 }
 
