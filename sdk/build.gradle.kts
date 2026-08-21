@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "no.issuetracker"
-version = "0.5.0"
+version = "0.6.0"
 
 // The Vanniktech plugin reads credentials from Gradle properties
 // `mavenCentralUsername` / `mavenCentralPassword` and signing key
@@ -30,7 +30,7 @@ mavenPublishing {
 
     pom {
         name.set("Issuetracker SDK for Android")
-        description.set("Drop-in issue reporter SDK for Android apps. Shake the device or call Issuetracker.report() to capture a screenshot and file an issue.")
+        description.set("Drop-in issue reporter SDK for Android phones, tablets, and TVs (Android TV, Google TV, Fire TV). Shake the device, hold Play/Pause on the remote, or call Issuetracker.report() to capture a screenshot and file an issue.")
         inceptionYear.set("2026")
         url.set("https://github.com/aslekinnerod/issuetracker-sdk-android")
         licenses {
