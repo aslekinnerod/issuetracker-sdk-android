@@ -12,6 +12,7 @@ import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.Until
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -64,10 +65,28 @@ class RemoteHoldE2ETest {
     @Test
     fun twoSecondHoldOpensReporter() {
         pressPlayPause(holdMs = 2_300)
+        failIfTerminated()
         assertTrue(
             "reporter did not open after a 2.3 s hold",
             reporterAppears(timeoutMs = 5_000),
         )
+    }
+
+    /**
+     * ADR-0003 terminal state. A terminated install makes every other
+     * assertion meaningless — fail loudly instead of letting tests
+     * half-pass against the terminal screen. (A submit against a key
+     * whose allowedClients whitelist excludes this app's bundle id
+     * terminates the SDK with invalid_api_key — clear app data and use
+     * a key provisioned for no.issuetracker.sampletv.)
+     */
+    private fun failIfTerminated() {
+        if (device.hasObject(By.text("Bug reporting is no longer available."))) {
+            fail(
+                "SDK is TERMINATED on this install — clear app data and " +
+                    "verify the API key's client whitelist",
+            )
+        }
     }
 
     /**
@@ -107,6 +126,12 @@ class RemoteHoldE2ETest {
             "submission surfaced an error",
             device.hasObject(By.textStartsWith("Error:")),
         )
+        // Form dismissal alone is AMBIGUOUS: a terminal server error
+        // swaps the form for TerminatedScreen (ADR-0003), which also
+        // removes "Send report". Only dismissal WITHOUT the terminal
+        // screen is a genuine createIssueFromSdk success.
+        SystemClock.sleep(1_000)
+        failIfTerminated()
     }
 
     /** Injects ACTION_DOWN, waits, then ACTION_UP — a genuine hold. */
