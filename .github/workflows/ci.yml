@@ -17,3 +17,5 @@ jobs:
       - uses: android-actions/setup-android@v3
       - name: Build SDK + sample app
         run: ./gradlew :sdk:assembleRelease :sample-app:assembleDebug
+      - name: Unit tests
+        run: ./gradlew :sdk:testReleaseUnitTest

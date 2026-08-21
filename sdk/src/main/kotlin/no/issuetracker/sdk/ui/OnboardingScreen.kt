@@ -204,7 +204,9 @@ private fun TriggerTile(
 // Minimal token palette inlined here (Compose) so the SDK doesn't
 // depend on a Material theme being provided by the host app. Matches
 // the values in the iOS / Web SDKs.
-private object OnboardingTokens {
+// Internal (not private) so ContrastTest can assert WCAG 1.4.3 ratios
+// against the real values.
+internal object OnboardingTokens {
     val surfaceApp = Color(0xFFF4F7FA)
     val surfaceCard = Color(0xFFFFFFFF)
     val surface1 = Color(0xFFEAF0F6)

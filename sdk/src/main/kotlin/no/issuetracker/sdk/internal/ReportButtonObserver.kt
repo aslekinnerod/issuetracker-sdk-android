@@ -40,7 +40,9 @@ import java.lang.ref.WeakReference
  * immediately).
  */
 internal object ReportButtonObserver {
-    private const val BACKGROUND_COLOR = 0xFF1577AD.toInt()
+    // Internal (not private) so ContrastTest can assert the white-on-pill
+    // WCAG 1.4.3 ratio against the real value.
+    internal const val BACKGROUND_COLOR = 0xFF1577AD.toInt()
     private const val RIPPLE_COLOR = 0x33FFFFFF
     private const val MARGIN_DP = 16
     private const val MIN_TOUCH_TARGET_DP = 48
