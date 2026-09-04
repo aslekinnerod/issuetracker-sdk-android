@@ -9,6 +9,7 @@ import no.issuetracker.sdk.internal.AccessibilityActionObserver
 import no.issuetracker.sdk.internal.ActivityProvider
 import no.issuetracker.sdk.internal.AttestationStore
 import no.issuetracker.sdk.internal.BreadcrumbStore
+import no.issuetracker.sdk.internal.CompanionAttestationClient
 import no.issuetracker.sdk.internal.CrashReporter
 import no.issuetracker.sdk.internal.FormFactor
 import no.issuetracker.sdk.internal.LifecycleStore
@@ -186,6 +187,17 @@ object Issuetracker {
             CrashReporter.install(application)
         }
         configScope.launch {
+            // ADR-0005 Decision 2: ask the companion app for a tester
+            // token before anything reads `canTriggerReport`. Silent and
+            // best-effort — no companion, no enrollment, or a signature
+            // that does not match the pin all just leave the store as
+            // it was. It runs first inside this one launch so the
+            // chain token -> config -> onboarding is sequential for
+            // free, and it is IO-dispatched internally because
+            // ContentResolver.query is a blocking binder call and
+            // configure() is documented as an Application.onCreate
+            // (main thread) call.
+            CompanionAttestationClient.hydrate(rt)
             AttestationStore.refreshRemoteConfig(rt)
             // Onboarding waits for the config refresh so we never
             // advertise gestures that are gated off for this install —

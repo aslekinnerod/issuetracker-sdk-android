@@ -4,6 +4,18 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- ADR-0005 Decision 11: package visibility for the tester
+         companion app. AGP merges this into the host application's
+         manifest, so integrators do nothing — do not "fix" this by
+         documenting a customer-side step. Without it, hosts targeting
+         API 30+ cannot see the companion at all (resolveContentProvider
+         returns null) and attestation silently never happens.
+         The authority itself is exported without a permission; the
+         SDK authenticates it by signing certificate instead. -->
+    <queries>
+        <package android:name="no.issuetracker.testers" />
+    </queries>
+
     <application>
         <!-- fontScale|density|locale: Compose re-reads these without an
              activity recreation; recreating would destroy the one-shot

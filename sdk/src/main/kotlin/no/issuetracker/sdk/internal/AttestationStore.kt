@@ -16,9 +16,15 @@ import no.issuetracker.sdk.Runtime
  * and dev/staging-prefixed keys fail OPEN. Conservative where real end
  * users are, frictionless where people develop and QA.
  *
- * The token itself will arrive silently from the companion app's
- * ContentProvider (ADR-0005 Decision 2) once that ships; until then
- * hosts can inject one via `Issuetracker.setTesterToken(...)`.
+ * The token itself arrives silently from the companion app's
+ * ContentProvider (ADR-0005 Decision 2, see CompanionAttestationClient);
+ * hosts can also inject one via `Issuetracker.setTesterToken(...)`,
+ * which is the documented path for dev/staging keys since no non-prod
+ * companion build exists.
+ *
+ * Both the config cache and the token slot are apiKey-bound (ADR-0005
+ * Decision 9): a token minted for project A must never ride along into
+ * project B after a reconfigure.
  */
 internal object AttestationStore {
     private const val PREFS_NAME = "no.issuetracker.sdk.attestation"
@@ -26,6 +32,7 @@ internal object AttestationStore {
     private const val CONFIG_REQUIRE = "config_require_tester_attestation"
     private const val TOKEN_KEY = "tester_token"
     private const val TOKEN_EXPIRES_KEY = "tester_token_expires_at"
+    private const val TOKEN_API_KEY = "tester_token_api_key"
 
     @Volatile private var prefs: SharedPreferences? = null
     @Volatile private var currentApiKey: String? = null
@@ -60,6 +67,20 @@ internal object AttestationStore {
             p.getBoolean(CONFIG_REQUIRE, false)
         } else {
             null
+        }
+        // Token binding (ADR-0005 Decision 9), mirroring the config
+        // cache line for line. A token written before configure() has
+        // no key stamped on it — configure() is the first moment we
+        // know which project it belongs to, so we adopt it here. A
+        // token stamped with a DIFFERENT key is dropped, never carried
+        // forward: it would otherwise be attached to reports filed
+        // against another project.
+        if (p.contains(TOKEN_KEY)) {
+            when (p.getString(TOKEN_API_KEY, null)) {
+                null -> bindToken(apiKey)
+                apiKey -> Unit
+                else -> clearTesterToken()
+            }
         }
     }
 
@@ -110,17 +131,51 @@ internal object AttestationStore {
             return failModeDefault(key)
         }
 
-    /** Valid (non-expired) tester token, or null. */
+    /**
+     * Valid (non-expired) tester token for the configured project, or
+     * null.
+     *
+     * Expiry rule, unified across all four SDKs (ADR-0005 Decision 10):
+     * absent or `<= 0` means no local expiry; a positive expiry in the
+     * past means treat as absent AND clear, so a dead token does not
+     * sit on disk waiting to be mistaken for a live one.
+     *
+     * Binding: a token stamped with another project's key is invisible
+     * here even if install() has not yet swept it. Reads before
+     * configure() (currentApiKey == null) cannot evaluate the binding
+     * and return the token as-is — that is the pre-configure injection
+     * path, and install() reconciles it a moment later.
+     */
     val testerToken: String?
         get() {
             val p = prefs ?: return null
             val token = p.getString(TOKEN_KEY, null) ?: return null
+            val boundTo = p.getString(TOKEN_API_KEY, null)
+            val active = currentApiKey
+            if (active != null && boundTo != null && boundTo != active) return null
             val expiresAt = p.getLong(TOKEN_EXPIRES_KEY, 0L)
-            if (expiresAt > 0L && expiresAt < System.currentTimeMillis()) return null
+            if (expiresAt > 0L && expiresAt < System.currentTimeMillis()) {
+                clearTesterToken()
+                return null
+            }
             return token
         }
 
+    /**
+     * Host-injected token (`Issuetracker.setTesterToken`). Bound to the
+     * configured key when there is one; written unbound before
+     * configure(), for install() to adopt.
+     */
     fun setTesterToken(token: String, expiresAtMillis: Long?) {
+        storeTesterToken(token, expiresAtMillis, currentApiKey)
+    }
+
+    /**
+     * Companion-provided token. Always bound, because the provider is
+     * queried with a specific API key and answers for that project
+     * alone.
+     */
+    fun storeTesterToken(token: String, expiresAtMillis: Long?, apiKey: String?) {
         val editor = prefs?.edit() ?: return
         editor.putString(TOKEN_KEY, token)
         if (expiresAtMillis != null) {
@@ -128,13 +183,30 @@ internal object AttestationStore {
         } else {
             editor.remove(TOKEN_EXPIRES_KEY)
         }
+        if (apiKey != null) {
+            editor.putString(TOKEN_API_KEY, apiKey)
+        } else {
+            editor.remove(TOKEN_API_KEY)
+        }
         editor.apply()
+    }
+
+    /**
+     * Internal seam: stamps the stored token with the project it
+     * belongs to. Called by install() when adopting a token that was
+     * written before configure(); exposed for tests alongside adopt().
+     */
+    fun bindToken(apiKey: String) {
+        val p = prefs ?: return
+        if (!p.contains(TOKEN_KEY)) return
+        p.edit().putString(TOKEN_API_KEY, apiKey).apply()
     }
 
     fun clearTesterToken() {
         prefs?.edit()
             ?.remove(TOKEN_KEY)
             ?.remove(TOKEN_EXPIRES_KEY)
+            ?.remove(TOKEN_API_KEY)
             ?.apply()
     }
 

@@ -123,4 +123,74 @@ class AttestationStoreTest {
         AttestationStore.setTesterToken("itt_pretoken", null)
         assertEquals("itt_pretoken", AttestationStore.testerToken)
     }
+
+    // --- apiKey binding of the token slot (ADR-0005 Decision 9) ---
+
+    @Test
+    fun `install adopts a token stored before configure`() {
+        AttestationStore.installPrefs(appContext())
+        AttestationStore.setTesterToken("itt_pretoken", null)
+
+        AttestationStore.install(appContext(), "it_abcdef1234567890")
+        assertEquals("itt_pretoken", AttestationStore.testerToken)
+        assertTrue(AttestationStore.canTriggerReport)
+
+        // Now bound: a later process start on the same key keeps it.
+        AttestationStore.resetForTesting()
+        AttestationStore.install(appContext(), "it_abcdef1234567890")
+        assertEquals("itt_pretoken", AttestationStore.testerToken)
+    }
+
+    @Test
+    fun `token bound to a different key is cleared on install`() {
+        AttestationStore.install(appContext(), "it_projectA")
+        AttestationStore.setTesterToken("itt_projectAtoken", null)
+
+        AttestationStore.resetForTesting()
+        AttestationStore.install(appContext(), "it_projectB")
+        assertNull(AttestationStore.testerToken)
+        assertFalse(AttestationStore.canTriggerReport)
+
+        // Cleared, not merely hidden: reconfiguring back to the
+        // original project must not resurrect it.
+        AttestationStore.resetForTesting()
+        AttestationStore.install(appContext(), "it_projectA")
+        assertNull(AttestationStore.testerToken)
+    }
+
+    @Test
+    fun `token bound to another key is invisible before install sweeps it`() {
+        AttestationStore.install(appContext(), "it_projectA")
+        AttestationStore.setTesterToken("itt_projectAtoken", null)
+
+        AttestationStore.bindToken("it_projectB")
+        assertNull(AttestationStore.testerToken)
+    }
+
+    @Test
+    fun `expired token is cleared from disk`() {
+        AttestationStore.install(appContext(), "it_abcdef1234567890")
+        AttestationStore.setTesterToken("itt_sometoken", System.currentTimeMillis() - 1000)
+
+        assertNull(AttestationStore.testerToken)
+        assertFalse(
+            appContext().getSharedPreferences(prefsFile, Context.MODE_PRIVATE)
+                .contains("tester_token"),
+        )
+    }
+
+    @Test
+    fun `companion token is stored bound to the queried key`() {
+        AttestationStore.install(appContext(), "it_abcdef1234567890")
+        AttestationStore.storeTesterToken(
+            "itt_companion",
+            System.currentTimeMillis() + 60_000,
+            "it_abcdef1234567890",
+        )
+        assertEquals("itt_companion", AttestationStore.testerToken)
+
+        AttestationStore.resetForTesting()
+        AttestationStore.install(appContext(), "it_someotherkey")
+        assertNull(AttestationStore.testerToken)
+    }
 }
