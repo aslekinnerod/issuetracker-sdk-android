@@ -172,4 +172,17 @@ internal object ReportButtonObserver {
         attached = null
         button = null
     }
+
+    /**
+     * Test-only — removes any attached button and forgets the install
+     * flag so a fresh Application (Robolectric hands out a new one per
+     * test) can register its own lifecycle callbacks. Same seam as
+     * `LifecycleStore.resetForTesting()`.
+     */
+    internal fun resetForTesting() {
+        detachCurrent()
+        enabled = false
+        installed = false
+        onTrigger = null
+    }
 }

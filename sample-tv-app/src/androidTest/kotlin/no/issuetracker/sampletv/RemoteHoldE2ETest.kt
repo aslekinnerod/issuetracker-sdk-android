@@ -27,6 +27,16 @@ import org.junit.runner.RunWith
  * `input keyevent` can't hold a key, and the TV AVD exposes no
  * keyboard evdev node for sendevent, so instrumentation is the only
  * automatable path to a genuine hold.
+ *
+ * EVERY test here needs a real API key, not just the round-trip one.
+ * On the `it_staging_REPLACE_ME` placeholder that build.gradle.kts
+ * falls back to, `Issuetracker.configure()` fetches getSdkConfig, the
+ * backend answers the unknown key with a terminal reason, and
+ * `AttestationStore.refreshRemoteConfig` flips the SDK to one-way
+ * TERMINATED — the triggers are inert before the first hold is
+ * injected. Supply one via `ISSUETRACKER_SDK_API_KEY` in the
+ * environment or `issuetracker.sdk.apiKey` in local.properties, with
+ * `no.issuetracker.sampletv` in its allowedClients whitelist.
  */
 @RunWith(AndroidJUnit4::class)
 class RemoteHoldE2ETest {
@@ -59,6 +69,19 @@ class RemoteHoldE2ETest {
         assertFalse(
             "reporter opened on a short tap — violates TV_TRIGGERS.md",
             reporterAppears(timeoutMs = 3_500),
+        )
+        // The assertion above passes for free whenever the trigger is
+        // dead — a TERMINATED install, an unregistered observer, a key
+        // the backend rejects — so on its own it is not evidence that
+        // short taps are being ignored. Prove the trigger was live in
+        // this very session before trusting the negative. (Ported from
+        // sdk-tvos's RemoteHoldE2ETests, which found the same defect.)
+        pressPlayPause(holdMs = 2_300)
+        failIfTerminated()
+        assertTrue(
+            "control failed: the hold trigger was not live, so 'short tap " +
+                "did nothing' proves nothing",
+            reporterAppears(timeoutMs = 5_000),
         )
     }
 
@@ -95,8 +118,19 @@ class RemoteHoldE2ETest {
      * success signal is the reporter dismissing itself — ReportScreen
      * only closes on a successful createIssueFromSdk response; any
      * failure keeps the form up with an inline error.
+     *
+     * Marked [RequiresLiveBackend] because it files a real issue in a
+     * real project every time it runs. ci.yml's tv-e2e job runs it
+     * anyway when enabled — the whole suite needs a live key, so
+     * filtering this one out would buy nothing and hide a gap. Use the
+     * annotation to exclude it locally when you do not want the noise:
+     *
+     *     ./gradlew :sample-tv-app:connectedDebugAndroidTest \
+     *       -Pandroid.testInstrumentationRunnerArguments.notAnnotation=\
+     *         no.issuetracker.sampletv.RequiresLiveBackend
      */
     @Test
+    @RequiresLiveBackend
     fun fullSubmissionRoundTripSucceeds() {
         pressPlayPause(holdMs = 2_300)
         assertTrue("reporter did not open", reporterAppears(timeoutMs = 5_000))

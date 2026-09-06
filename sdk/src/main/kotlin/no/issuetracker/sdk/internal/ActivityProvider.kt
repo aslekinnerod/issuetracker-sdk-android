@@ -33,4 +33,15 @@ internal object ActivityProvider {
     }
 
     fun current(): Activity? = current?.get()
+
+    /**
+     * Test-only — forgets the tracked Activity and the install flag so a
+     * fresh Application (Robolectric hands out a new one per test) can
+     * register its own lifecycle callbacks. Same seam as
+     * `LifecycleStore.resetForTesting()`.
+     */
+    internal fun resetForTesting() {
+        current = null
+        installed = false
+    }
 }

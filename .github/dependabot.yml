@@ -1,0 +1,10 @@
+version: 2
+updates:
+  # Both workflows pin every `uses:` to a commit SHA. Without this,
+  # those pins quietly rot and nobody notices. Dependabot turns each
+  # bump into a reviewable PR that CI runs before it lands.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5

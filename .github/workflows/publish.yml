@@ -10,26 +10,135 @@ on:
       - '[0-9]+.[0-9]+.[0-9]+-*'
   workflow_dispatch:
 
+# The publish job holds the Sonatype token and the GPG private key.
+# Nothing here uses GITHUB_TOKEN for writes, so give it nothing to
+# write with. `verify` widens this to `actions: read` for itself only.
+permissions:
+  contents: read
+
+# Queue, never cancel. Two concurrent `publishAndReleaseToMavenCentral`
+# runs upload two bundles for the same coordinate; cancelling one
+# mid-upload leaves an orphan deployment in the Central Portal that
+# nothing cleans up.
+concurrency:
+  group: publish-maven-central
+  cancel-in-progress: false
+
 jobs:
-  publish:
+  # Everything that can still be undone happens here. Once the publish
+  # job starts, Maven Central is immutable — a release cannot be
+  # deleted, overwritten, or re-cut.
+  verify:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read   # to query the CI run for this commit
+    outputs:
+      version: ${{ steps.guard.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # Full history: the ancestor check below needs origin/main.
+          fetch-depth: 0
+      # gradle-wrapper.jar is a committed binary that both workflows
+      # execute. Check it against Gradle's published checksums before
+      # running it, on every path that can reach the signing key.
+      - uses: gradle/actions/wrapper-validation@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
 
-      - name: Verify gradle version matches tag
-        if: github.event_name == 'push'
+      - name: Guard the release coordinate
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          tag="${GITHUB_REF_NAME}"
+          set -uo pipefail
+
+          # Applies to workflow_dispatch as well as tag pushes: a manual
+          # run must select a tag in the ref dropdown. Dispatching on a
+          # branch would otherwise publish whatever `version = ` happens
+          # to say on that branch, under a coordinate nobody chose.
+          if [ "$GITHUB_REF_TYPE" != "tag" ]; then
+            echo "::error::Publishing requires a tag ref, got ${GITHUB_REF_TYPE} '${GITHUB_REF_NAME}'. Re-run this workflow with a release tag selected as the ref."
+            exit 1
+          fi
+          tag="$GITHUB_REF_NAME"
+
           gradle_version=$(grep -E '^version = ' sdk/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/')
+          if [ -z "$gradle_version" ]; then
+            echo "::error::Could not read 'version = ' from sdk/build.gradle.kts"
+            exit 1
+          fi
           if [ "$tag" != "$gradle_version" ]; then
             echo "::error::Tag '$tag' does not match Gradle version '$gradle_version' in sdk/build.gradle.kts"
             exit 1
           fi
+
+          # The tagged commit must be on main. Combined with the CI
+          # check below this is what carries main's coverage onto the
+          # bytes being released. Note that ci.yml's tv-e2e job is
+          # currently gated off (no provisioned API key — see its
+          # comment), so a green CI run does NOT include TV trigger
+          # coverage today.
+          git fetch --no-tags --quiet origin +refs/heads/main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Tag '$tag' ($GITHUB_SHA) is not reachable from origin/main. Merge the branch first — Maven Central releases cannot be withdrawn."
+            exit 1
+          fi
+
+          # CI must actually have passed on this exact commit. A tag can
+          # be moved onto a commit whose CI run failed or never ran.
+          runs=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${GITHUB_SHA}&per_page=100" \
+            --jq '[.workflow_runs[] | select(.conclusion == "success")] | length')
+          if [ "${runs:-0}" -lt 1 ]; then
+            echo "::error::No successful CI run found for ${GITHUB_SHA}. Push the commit to main and let ci.yml go green before tagging."
+            exit 1
+          fi
+
+          # And the coordinate must be free. Force-moving an existing tag
+          # satisfies every check above but re-publishes an already
+          # released version. Central will reject or, worse, half-accept
+          # it — catch it here instead.
+          url="https://repo1.maven.org/maven2/no/issuetracker/sdk/${tag}/sdk-${tag}.pom"
+          code=$(curl -sS --max-time 30 -o /dev/null -w '%{http_code}' "$url")
+          case "$code" in
+            404) : ;;
+            200)
+              echo "::error::no.issuetracker:sdk:${tag} is already on Maven Central. Bump the version in sdk/build.gradle.kts and cut a new tag — released versions are immutable."
+              exit 1
+              ;;
+            *)
+              echo "::error::Could not determine whether ${tag} is already released (HTTP ${code} from ${url}). Refusing to publish on an unverified answer."
+              exit 1
+              ;;
+          esac
+
+          echo "version=$tag" >> "$GITHUB_OUTPUT"
+
+      # Compile and test the exact tagged tree. ci.yml does not trigger
+      # on tag pushes, so without this the published bytes would never
+      # have been built by this workflow at all.
+      - name: Build every module (debug + release)
+        run: ./gradlew assembleDebug assembleRelease
+
+      - name: Unit tests
+        run: ./gradlew testReleaseUnitTest
+
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: gradle/actions/wrapper-validation@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
 
       - name: Publish to Maven Central
         env:
@@ -41,3 +150,37 @@ jobs:
         # plugin docs — the publishing task graph isn't fully
         # config-cache safe yet (as of plugin 0.30.x).
         run: ./gradlew :sdk:publishAndReleaseToMavenCentral --no-configuration-cache
+
+      # A green Gradle task means the upload call returned. With the
+      # Central Portal, validation and promotion happen afterwards and
+      # asynchronously, and their outcome is emailed to the account
+      # owner rather than reported here. Tag 0.4.0 exists in this repo
+      # and 0.4.0 is not on Maven Central — that is this exact gap
+      # having already happened once. So resolve the artifact.
+      - name: Verify the release is resolvable from Maven Central
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          set -uo pipefail
+          base="https://repo1.maven.org/maven2/no/issuetracker/sdk/${VERSION}"
+          # .asc alongside each artifact is how we know signing landed,
+          # not just that the bundle uploaded.
+          files="sdk-${VERSION}.pom sdk-${VERSION}.pom.asc sdk-${VERSION}.aar sdk-${VERSION}.aar.asc"
+          attempts=30   # 30 x 60s = 30 minutes
+          for i in $(seq 1 "$attempts"); do
+            missing=""
+            for f in $files; do
+              code=$(curl -sS --max-time 30 -o /dev/null -w '%{http_code}' "${base}/${f}")
+              if [ "$code" != "200" ]; then
+                missing="${missing} ${f}(HTTP ${code})"
+              fi
+            done
+            if [ -z "$missing" ]; then
+              echo "no.issuetracker:sdk:${VERSION} is on Maven Central with signatures."
+              exit 0
+            fi
+            echo "attempt ${i}/${attempts}: still waiting for:${missing}"
+            if [ "$i" -lt "$attempts" ]; then sleep 60; fi
+          done
+          echo "::error::no.issuetracker:sdk:${VERSION} did not appear on repo1.maven.org within 30 minutes. Either Sonatype rejected the deployment (check the validation email and https://central.sonatype.com/publishing/deployments) or sync is unusually slow. Do NOT assume the release succeeded."
+          exit 1
