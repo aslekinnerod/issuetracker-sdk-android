@@ -85,6 +85,14 @@ internal object AttestationStore {
     }
 
     suspend fun refreshRemoteConfig(runtime: Runtime) {
+        // ADR-0003 Decision 9.2: TERMINATED "disables all background
+        // tasks". configure() calls this on every launch, so without
+        // this gate a terminated install POSTs getSdkConfig forever —
+        // once per launch, across every deployed instance, for a
+        // project the server has already told us is gone. It can never
+        // change the outcome either: TERMINATED is one-way, and
+        // recovery is an explicit host-app re-init, never a poll.
+        if (LifecycleStore.isTerminated) return
         try {
             val result = ApiClient.call(
                 runtime.endpoint,

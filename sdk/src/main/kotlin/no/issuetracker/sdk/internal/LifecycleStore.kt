@@ -35,6 +35,12 @@ internal object LifecycleStore {
 
     @Volatile private var prefs: SharedPreferences? = null
 
+    // Held so the TERMINATED transition can drop the on-disk outbound
+    // queue (ADR-0003 Decision 9.6) without the caller having to
+    // thread a Context through every dispatch site. Application
+    // context only — never an Activity.
+    @Volatile private var appContext: Context? = null
+
     @Volatile
     var state: State = State.Ok
         private set
@@ -44,6 +50,7 @@ internal object LifecycleStore {
 
     fun install(context: Context) {
         if (prefs != null) return
+        appContext = context.applicationContext
         val p = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs = p
         val raw = p.getString(REASON_KEY, null)
@@ -72,6 +79,14 @@ internal object LifecycleStore {
             ?.putString(REASON_KEY, reason.rawValue)
             ?.putLong(AT_KEY, now)
             ?.apply()
+        // ADR-0003 Decision 9.6 — both halves of the invariant, in one
+        // place: persist the marker so a restart does not re-attempt
+        // delivery, AND drop the queue itself so there is nothing left
+        // to attempt. Doing it here (rather than at each dispatch
+        // site) is what makes it hold for every path that can
+        // terminate. Anything still queued was destined for a project
+        // the server has just told us no longer accepts it.
+        appContext?.let { CrashReporter.purgePendingQueue(it) }
         callback?.invoke(reason)
     }
 
@@ -83,6 +98,7 @@ internal object LifecycleStore {
      */
     internal fun resetForTesting() {
         prefs = null
+        appContext = null
         state = State.Ok
     }
 }

@@ -8,16 +8,17 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import androidx.test.core.app.ApplicationProvider
+import kotlinx.coroutines.runBlocking
 import no.issuetracker.sdk.Runtime
 import no.issuetracker.sdk.SdkErrorReason
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
-import org.junit.Ignore
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
@@ -54,6 +55,7 @@ class TerminatedTriggerTest {
         ActivityProvider.resetForTesting()
         ReportButtonObserver.resetForTesting()
         ActivityProvider.install(app())
+        pendingCrashFile().delete()
     }
 
     @After
@@ -146,13 +148,10 @@ class TerminatedTriggerTest {
      * delivered — one report per terminated install, after the SDK has
      * been told the project is gone.
      *
-     * Ignored, not deleted: this asserts the ADR-mandated behaviour and
-     * fails against today's implementation. Un-ignore together with the
-     * fix (gate `reportCrashIfAny` on `LifecycleStore.isTerminated`, and
-     * delete the pending file on the transition).
+     * Closed by ITD-164: `reportCrashIfAny` consults [LifecycleStore]
+     * and purges instead of sending.
      */
     @Test
-    @Ignore("KNOWN GAP: CrashReporter does not consult LifecycleStore — verified failing on 2026-09-05; see the ADR-0003 audit findings")
     fun `a pending crash report is not delivered once terminated`() {
         val server = FakeCallableServer().also { it.start() }
         try {
@@ -181,11 +180,10 @@ class TerminatedTriggerTest {
      * decision exists to stop, and it can never change the outcome
      * because TERMINATED is one-way.
      *
-     * Ignored, not deleted: asserts the ADR-mandated behaviour and
-     * fails against today's implementation.
+     * Closed by ITD-164: `refreshRemoteConfig` returns early while
+     * terminated.
      */
     @Test
-    @Ignore("KNOWN GAP: refreshRemoteConfig runs while TERMINATED — verified failing on 2026-09-05; see the ADR-0003 audit findings")
     fun `the config refresh does not run once terminated`() {
         val server = FakeCallableServer().also { it.start() }
         try {
@@ -223,6 +221,130 @@ class TerminatedTriggerTest {
         }
     }
 
+    @Test
+    fun `the transition purges a pending crash queued before termination`() {
+        // ADR-0003 Decision 9.6: "drop the queue atomically on first
+        // TERMINATED signal". The crash is queued while the SDK is OK
+        // and the terminal signal arrives on a *different* path — the
+        // marker must not survive to be re-attempted on the next
+        // launch.
+        writePendingCrash()
+        assertTrue(pendingCrashFile().exists())
+
+        LifecycleStore.transitionToTerminated(SdkErrorReason.PROJECT_DELETED, null)
+
+        assertFalse(
+            "the on-disk queue must be dropped on the TERMINATED transition",
+            pendingCrashFile().exists(),
+        )
+    }
+
+    @Test
+    fun `a terminal error on the crash upload terminates the SDK`() {
+        // The finding: the crash-upload coroutine ended in an empty
+        // catch, so the one dispatch site that runs unattended in the
+        // background — hours after the crash, on a launch where nobody
+        // opens the reporting surface — swallowed the terminal signal
+        // and left the install live.
+        val server = FakeCallableServer().also { it.start() }
+        try {
+            server.replyWithError(404, "project_deleted", recoverable = false)
+            writePendingCrash()
+            val received = mutableListOf<SdkErrorReason>()
+
+            runBlocking {
+                CrashReporter.reportCrashIfAny(
+                    Runtime(
+                        app(),
+                        API_KEY,
+                        server.endpoint,
+                        onConfigurationError = { received.add(it) },
+                    ),
+                )?.join()
+            }
+
+            assertTrue(LifecycleStore.isTerminated)
+            assertEquals(listOf(SdkErrorReason.PROJECT_DELETED), received)
+            assertFalse(pendingCrashFile().exists())
+        } finally {
+            server.stop()
+        }
+    }
+
+    @Test
+    fun `a tester gating rejection on the crash upload does not terminate`() {
+        // ADR-0005 reasons are `recoverable: false` but NOT terminal —
+        // the project is alive. One predicate across the SDK means the
+        // crash path must agree with the submit path here.
+        val server = FakeCallableServer().also { it.start() }
+        try {
+            server.replyWithError(403, "tester_attestation_required", recoverable = false)
+            writePendingCrash()
+
+            runBlocking {
+                CrashReporter.reportCrashIfAny(
+                    Runtime(app(), API_KEY, server.endpoint, onConfigurationError = null),
+                )?.join()
+            }
+
+            assertFalse(LifecycleStore.isTerminated)
+        } finally {
+            server.stop()
+        }
+    }
+
+    @Test
+    fun `a transient failure keeps the crash report for the next launch`() {
+        // The other half of Decision 9.6: reports are *persisted*
+        // while OK. A report is only dropped because it was delivered,
+        // or because the project is provably gone — never because the
+        // network blinked.
+        val server = FakeCallableServer().also { it.start() }
+        try {
+            server.replyWithError(503, "transient", recoverable = true)
+            writePendingCrash()
+
+            runBlocking {
+                CrashReporter.reportCrashIfAny(
+                    Runtime(app(), API_KEY, server.endpoint, onConfigurationError = null),
+                )?.join()
+            }
+
+            assertFalse(LifecycleStore.isTerminated)
+            assertTrue(
+                "an undelivered report must survive for the next launch",
+                pendingCrashFile().exists(),
+            )
+        } finally {
+            server.stop()
+        }
+    }
+
+    @Test
+    fun `an undeliverable crash report is not retried forever`() {
+        // The bound on the retention above: three launches, then the
+        // marker is dropped rather than becoming a permanent request
+        // on every cold start.
+        val server = FakeCallableServer().also { it.start() }
+        try {
+            server.reply(500, """{"error":{"message":"boom","status":"INTERNAL"}}""")
+            writePendingCrash()
+
+            repeat(4) {
+                runBlocking {
+                    CrashReporter.reportCrashIfAny(
+                        Runtime(app(), API_KEY, server.endpoint, onConfigurationError = null),
+                    )?.join()
+                }
+            }
+
+            assertFalse(pendingCrashFile().exists())
+            assertEquals(3, server.requestPaths.size)
+        } finally {
+            server.stop()
+        }
+    }
+
     // --- helpers --------------------------------------------------------
 
     private fun runtime() = Runtime(
@@ -232,9 +354,12 @@ class TerminatedTriggerTest {
         onConfigurationError = null,
     )
 
+    private fun pendingCrashFile(): File =
+        File(File(app().filesDir, "issuetracker"), "pending_crash.json")
+
     private fun writePendingCrash() {
-        val dir = File(app().filesDir, "issuetracker").apply { mkdirs() }
-        File(dir, "pending_crash.json").writeText(
+        File(app().filesDir, "issuetracker").mkdirs()
+        pendingCrashFile().writeText(
             JSONObject()
                 .put("detectedAt", 1747000000000L)
                 .put("exceptionName", "java.lang.IllegalStateException")

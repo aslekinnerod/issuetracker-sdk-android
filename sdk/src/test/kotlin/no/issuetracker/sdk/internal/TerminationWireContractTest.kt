@@ -54,6 +54,7 @@ class TerminationWireContractTest {
         AttestationStore.resetForTesting()
         clearPrefs("no.issuetracker.sdk.lifecycle")
         clearPrefs("no.issuetracker.sdk.attestation")
+        java.io.File(java.io.File(app().filesDir, "issuetracker"), "pending_crash.json").delete()
         received.clear()
         LifecycleStore.install(app())
         ReporterIdentity.install(app())
@@ -335,6 +336,69 @@ class TerminationWireContractTest {
 
         assertTrue(LifecycleStore.isTerminated)
         assertEquals("invalid_api_key", lifecyclePrefs().getString("terminated_reason", null))
+    }
+
+    // --- 7. One predicate, every dispatch site ------------------------
+
+    /**
+     * ITD-163. The SDK has three places that turn a server error into
+     * a lifecycle decision: the report submit, the `getSdkConfig`
+     * refresh, and the background crash upload. They must all consult
+     * the same predicate — `SdkErrorReason.isTerminal` — because the
+     * obvious alternatives are subtly wrong: `!details.recoverable`
+     * would terminate on ADR-0005's tester-gating reasons, which are
+     * non-recoverable but explicitly NOT terminal, and the HTTP status
+     * carries no contract at all.
+     *
+     * Driven behaviourally rather than by reading the predicate, so a
+     * path that grows its own copy of the rule fails here.
+     */
+    @Test
+    fun `every dispatch path agrees on every reason`() {
+        SdkErrorReason.entries.forEach { reason ->
+            // Same status for every reason on purpose: the paths must
+            // agree with each other AND agree only with details.error.
+            server.replyWithError(404, reason.rawValue, recoverable = reason.isRecoverable)
+
+            val expected =
+                if (reason.isTerminal) true to listOf(reason)
+                else false to emptyList<SdkErrorReason>()
+            val outcomes = linkedMapOf<String, Pair<Boolean, List<SdkErrorReason>>>()
+            outcomes["submit"] = drive { submit() }
+            outcomes["config"] = drive { runBlocking { AttestationStore.refreshRemoteConfig(runtime()) } }
+            outcomes["crash"] = drive { crashUpload() }
+
+            assertEquals(
+                "dispatch paths disagree on ${reason.rawValue}",
+                outcomes.keys.associateWith { expected },
+                outcomes.toMap(),
+            )
+        }
+    }
+
+    /** Runs one dispatch path from a clean lifecycle and reports what it did. */
+    private fun drive(path: () -> Unit): Pair<Boolean, List<SdkErrorReason>> {
+        LifecycleStore.resetForTesting()
+        clearPrefs("no.issuetracker.sdk.lifecycle")
+        received.clear()
+        LifecycleStore.install(app())
+        path()
+        return LifecycleStore.isTerminated to received.toList()
+    }
+
+    /** Queues a crash and runs the background upload to completion. */
+    private fun crashUpload() = runBlocking {
+        java.io.File(app().filesDir, "issuetracker").mkdirs()
+        java.io.File(java.io.File(app().filesDir, "issuetracker"), "pending_crash.json")
+            .writeText(
+                JSONObject()
+                    .put("detectedAt", 1747000000000L)
+                    .put("exceptionName", "java.lang.IllegalStateException")
+                    .put("exceptionReason", "boom")
+                    .toString(),
+            )
+        CrashReporter.reportCrashIfAny(runtime())?.join()
+        Unit
     }
 
     // --- helpers ------------------------------------------------------
